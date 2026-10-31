@@ -163,4 +163,20 @@
     <string name="odometer_only">Лише пробіг</string>
     <string name="panel_reset">Це заміна панелі</string>
     <string name="reference_ignored">Корисний обʼєм і температура перемикання зберігаються в профілі й не беруть участі в розрахунку.</string>
+    <string name="report_distance">Відстань</string>
+    <string name="report_fills">Заправки за паливом</string>
+    <string name="report_costs">Витрати</string>
+    <string name="report_cycles">Контрольні цикли</string>
+    <string name="report_consumption">Витрата</string>
+    <string name="report_scenario">Бензиновий сценарій</string>
+    <string name="report_gbo">Витрати ГБО</string>
+    <string name="report_baseline_rate">Базова витрата</string>
+    <string name="report_consumed">Спожито</string>
+    <string name="report_fill_line">%1$s · %2$d · %3$s %4$s</string>
+    <string name="report_km">%1$d км</string>
+    <string name="report_rate">%1$s %2$s/100</string>
+    <string name="report_l100">л/100 км</string>
+    <string name="report_apply_last_n">Показати останні км</string>
+    <string name="report_apply_custom">Показати інтервал</string>
+    <string name="chart_closed">Графік закритих циклів</string>
 </resources>
