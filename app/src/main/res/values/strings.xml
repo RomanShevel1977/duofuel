@@ -149,5 +149,7 @@
     <string name="cost">Стоимость</string>
     <string name="add">Добавить</string>
     <string name="edit">Изменить</string>
+    <string name="odometer_only">Только пробег</string>
+    <string name="panel_reset">Это замена панели</string>
     <string name="reference_ignored">Полезный объём и температура переключения хранятся в профиле и не участвуют в расчёте.</string>
 </resources>

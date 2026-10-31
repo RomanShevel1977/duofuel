@@ -52,6 +52,7 @@ data class ScreenState(
     val report: DashboardReport? = null,
     val ready: Boolean = false,
     val notice: String? = null,
+    val openRefuel: Boolean = false,
 )
 
 @HiltViewModel
@@ -88,9 +89,15 @@ class DuoFuelViewModel @Inject constructor(
     ): List<String> {
         val issues = VehicleValidator.validate(profile.name, fuels.map { app.duofuel.domain.validation.FuelDraft(it.fuelType, it.unit, it.currency) })
         if (issues.isNotEmpty()) return issues.map { issueText(context, it) }
-        viewModelScope.launch { repository.saveVehicle(profile, fuels, settings) }
+        val creating = _state.value.app.active == null
+        viewModelScope.launch {
+            repository.saveVehicle(profile, fuels, settings)
+            if (creating) _state.update { it.copy(openRefuel = true) }
+        }
         return emptyList()
     }
+
+    fun consumeOpenRefuel() = _state.update { it.copy(openRefuel = false) }
 
     fun saveFuel(draft: FuelEntryDraft, confirmDecrease: Boolean, confirmChronology: Boolean): List<String> {
         val issues = mutableListOf<ValidationIssue>()
@@ -129,9 +136,51 @@ class DuoFuelViewModel @Inject constructor(
             draft.id ?: "draft", draft.vehicleId, draft.occurredAtMs, draft.odometerKm,
             OdometerKind.READING, draft.inputMethod, RecordSource.MANUAL, null, System.currentTimeMillis(),
         )
-        val existing = _state.value.app.active?.odometer.orEmpty()
+        val existing = _state.value.app.active?.odometer.orEmpty().filter { it.linkedFuelEntryId != draft.id }
         return OdometerValidator.check(candidate, existing, false, true)
             .any { it.code == IssueCode.DECREASE_NEEDS_CONFIRMATION }
+    }
+
+    fun needsChronologyConfirm(draft: FuelEntryDraft): Boolean {
+        val candidate = OdometerEventCalc(
+            draft.id ?: "draft", draft.vehicleId, draft.occurredAtMs, draft.odometerKm,
+            OdometerKind.READING, draft.inputMethod, RecordSource.MANUAL, null, System.currentTimeMillis(),
+        )
+        val existing = _state.value.app.active?.odometer.orEmpty().filter { it.linkedFuelEntryId != draft.id }
+        return OdometerValidator.check(candidate, existing, true, false)
+            .any { it.code == IssueCode.CHRONOLOGY_NEEDS_CONFIRMATION }
+    }
+
+    fun saveOdometerReading(vehicleId: String, occurredAtMs: Long, odometerKm: Int, trip: Boolean, panelReset: Boolean): List<String> {
+        val base = _state.value.app.active?.odometer?.maxByOrNull { it.sortKey() }?.odometerKm
+        val absolute = if (trip) {
+            if (base == null) {
+                return listOf(issueText(context, ValidationIssue(app.duofuel.domain.validation.FieldCode.TRIP, IssueCode.TRIP_NEEDS_BASE, true)))
+            }
+            base + odometerKm
+        } else {
+            odometerKm
+        }
+        val candidate = OdometerEventCalc(
+            id = UUID.randomUUID().toString(),
+            vehicleId = vehicleId,
+            occurredAtMs = occurredAtMs,
+            odometerKm = absolute,
+            kind = if (panelReset) OdometerKind.RESET else OdometerKind.READING,
+            inputMethod = if (trip) InputMethod.TRIP else InputMethod.ABSOLUTE,
+            source = RecordSource.MANUAL,
+            linkedFuelEntryId = null,
+            createdAtMs = System.currentTimeMillis(),
+        )
+        val issues = OdometerValidator.check(
+            candidate,
+            _state.value.app.active?.odometer.orEmpty(),
+            confirmDecrease = panelReset,
+            confirmChronology = true,
+        )
+        if (issues.any { it.blocking }) return issues.filter { it.blocking }.map { issueText(context, it) }
+        viewModelScope.launch { repository.saveOdometer(candidate) }
+        return emptyList()
     }
 
     fun undo() {

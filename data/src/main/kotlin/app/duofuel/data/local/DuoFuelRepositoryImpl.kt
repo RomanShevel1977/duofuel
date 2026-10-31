@@ -229,6 +229,26 @@ class DuoFuelRepositoryImpl(
         id
     }
 
+    override suspend fun saveOdometer(event: app.duofuel.domain.model.OdometerEventCalc) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val existing = dao.odometerById(event.id)
+        dao.upsertOdometer(
+            OdometerEventEntity(
+                id = event.id.ifBlank { UUID.randomUUID().toString() },
+                vehicleId = event.vehicleId,
+                occurredAt = event.occurredAtMs,
+                odometerKm = event.odometerKm,
+                inputMethod = event.inputMethod.name,
+                kind = event.kind.name,
+                source = "MANUAL",
+                linkedFuelEntryId = null,
+                createdAt = existing?.createdAt ?: event.createdAtMs.takeIf { it > 0 } ?: now,
+                updatedAt = now,
+            ),
+        )
+        refreshCache(event.vehicleId)
+    }
+
     override suspend fun deleteFuel(id: String) = withContext(Dispatchers.IO) {
         val row = dao.fuelById(id) ?: return@withContext
         dao.deleteOdometerForFuel(id)

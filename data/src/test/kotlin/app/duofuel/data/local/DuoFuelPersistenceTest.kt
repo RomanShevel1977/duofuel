@@ -7,7 +7,9 @@ import app.duofuel.domain.model.CalculationSettingsCalc
 import app.duofuel.domain.model.ExpenseCalc
 import app.duofuel.domain.model.FuelType
 import app.duofuel.domain.model.InputMethod
+import app.duofuel.domain.model.OdometerEventCalc
 import app.duofuel.domain.model.OdometerKind
+import app.duofuel.domain.model.RecordSource
 import app.duofuel.domain.model.ServiceRecordCalc
 import app.duofuel.domain.repository.FuelConfigProfile
 import app.duofuel.domain.repository.FuelEntryDraft
@@ -128,6 +130,85 @@ class DuoFuelPersistenceTest {
             assertEquals(false, active.expenses.single().includeInGbo)
         } finally {
             second.close()
+        }
+    }
+
+    @Test
+    fun editFuel_keepsOneLinkedReading_andStandaloneOdometerIsSeparate() = runBlocking {
+        val name = "duofuel-edit.db"
+        context.deleteDatabase(name)
+        val db = open(name)
+        try {
+            val repo = DuoFuelRepositoryImpl(db.dao(), context)
+            val at = 1_700_000_000_000L
+            repo.saveVehicle(
+                profile("veh-edit", at),
+                listOf(FuelConfigProfile("fuel-lpg", FuelType.LPG, "L", null, "UAH", null)),
+                CalculationSettingsCalc(null, null, "UAH", true, false),
+            )
+            repo.saveFuel(
+                FuelEntryDraft(
+                    id = "fill-edit",
+                    vehicleId = "veh-edit",
+                    fuelType = FuelType.LPG,
+                    occurredAtMs = at,
+                    odometerKm = 100,
+                    inputMethod = InputMethod.ABSOLUTE,
+                    odometerKind = OdometerKind.READING,
+                    quantity = 10.0,
+                    unit = "L",
+                    unitPriceMinor = 100,
+                    totalCostMinor = 1_000,
+                    currency = "UAH",
+                    isFull = true,
+                    station = null,
+                    notes = null,
+                    receiptUri = null,
+                    extraAttachmentUris = emptyList(),
+                ),
+            )
+            repo.saveFuel(
+                FuelEntryDraft(
+                    id = "fill-edit",
+                    vehicleId = "veh-edit",
+                    fuelType = FuelType.LPG,
+                    occurredAtMs = at,
+                    odometerKm = 100,
+                    inputMethod = InputMethod.ABSOLUTE,
+                    odometerKind = OdometerKind.READING,
+                    quantity = 12.5,
+                    unit = "L",
+                    unitPriceMinor = 100,
+                    totalCostMinor = 1_250,
+                    currency = "UAH",
+                    isFull = false,
+                    station = null,
+                    notes = null,
+                    receiptUri = null,
+                    extraAttachmentUris = emptyList(),
+                ),
+            )
+            repo.saveOdometer(
+                OdometerEventCalc(
+                    id = "odo-reset",
+                    vehicleId = "veh-edit",
+                    occurredAtMs = at + 1,
+                    odometerKm = 5,
+                    kind = OdometerKind.RESET,
+                    inputMethod = InputMethod.ABSOLUTE,
+                    source = RecordSource.MANUAL,
+                    linkedFuelEntryId = null,
+                    createdAtMs = at,
+                ),
+            )
+            val state = repo.observeApp().first()
+            val active = state.active!!
+            assertEquals(12.5, active.entries.single().quantity, 0.0)
+            assertEquals(false, active.entries.single().isFull)
+            assertEquals(1, active.odometer.count { it.linkedFuelEntryId == "fill-edit" })
+            assertEquals(OdometerKind.RESET, active.odometer.single { it.id == "odo-reset" }.kind)
+        } finally {
+            db.close()
         }
     }
 
