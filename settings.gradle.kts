@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "GasoLine"
+rootProject.name = "DuoFuel"
 include(":app", ":domain", ":data")
