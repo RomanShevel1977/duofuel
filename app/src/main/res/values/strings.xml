@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- OPEN-LANG: русский по умолчанию, украинский в values-uk. Английского нет. -->
 <resources>
-    <string name="app_name">GasoLine</string>
+    <string name="app_name">DuoFuel</string>
     <string name="nav_dashboard">Сводка</string>
     <string name="nav_refuel">Заправка</string>
     <string name="nav_history">История</string>

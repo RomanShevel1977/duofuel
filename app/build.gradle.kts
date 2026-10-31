@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "app.duofuel.gasoline"
+    namespace = "app.duofuel"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.duofuel.gasoline"
+        applicationId = "app.duofuel"
         minSdk = 24
         targetSdk = 35
         versionCode = 1

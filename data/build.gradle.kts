@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "app.duofuel.gasoline.data"
+    namespace = "app.duofuel.data"
     compileSdk = 35
 
     defaultConfig {
