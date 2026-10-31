@@ -11,6 +11,7 @@ import app.duofuel.domain.model.OdometerEventCalc
 import app.duofuel.domain.model.OdometerKind
 import app.duofuel.domain.model.RecordSource
 import app.duofuel.domain.model.ServiceRecordCalc
+import app.duofuel.domain.model.ServiceScheduleCalc
 import app.duofuel.domain.repository.FuelConfigProfile
 import app.duofuel.domain.repository.FuelEntryDraft
 import app.duofuel.domain.repository.VehicleProfile
@@ -207,6 +208,89 @@ class DuoFuelPersistenceTest {
             assertEquals(false, active.entries.single().isFull)
             assertEquals(1, active.odometer.count { it.linkedFuelEntryId == "fill-edit" })
             assertEquals(OdometerKind.RESET, active.odometer.single { it.id == "odo-reset" }.kind)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun resave_keepsFuelConfig_andBackdatedService() = runBlocking {
+        val name = "duofuel-profile.db"
+        context.deleteDatabase(name)
+        val db = open(name)
+        try {
+            val repo = DuoFuelRepositoryImpl(db.dao(), context)
+            val at = 1_700_000_000_000L
+            val fuels = listOf(
+                FuelConfigProfile("fuel-petrol", FuelType.PETROL, "L", 50.0, "UAH", 5_500),
+                FuelConfigProfile("fuel-lpg", FuelType.LPG, "L", 42.0, "UAH", 2_700),
+            )
+            val settings = CalculationSettingsCalc(null, null, "UAH", true, false)
+            repo.saveVehicle(profile("veh-profile", at), fuels, settings)
+            repo.saveVehicle(
+                profile("veh-profile", at),
+                listOf(
+                    FuelConfigProfile("fuel-petrol", FuelType.PETROL, "L", 55.0, "UAH", 5_600),
+                    FuelConfigProfile("fuel-lpg", FuelType.LPG, "L", 42.0, "EUR", 2_800),
+                ),
+                settings,
+            )
+            val past = at - 86_400_000L
+            repo.saveService(
+                ServiceRecordCalc(
+                    id = "svc-back",
+                    vehicleId = "veh-profile",
+                    serviceType = "liquid-filter",
+                    occurredAtMs = past,
+                    odometerKm = 900,
+                    costMinor = 10_000,
+                    currency = "UAH",
+                    isGbo = true,
+                    scheduleId = "sch-1",
+                    createdAtMs = at,
+                    provider = "Master",
+                    notes = "backdated",
+                ),
+                provider = "Master",
+                notes = "backdated",
+            )
+            val schedule = ServiceScheduleCalc(
+                id = "sch-1",
+                vehicleId = "veh-profile",
+                serviceType = "liquid-filter",
+                intervalKm = 10_000,
+                intervalDays = 180,
+                dueOdometerKm = 10_900,
+                dueDateEpochDay = 20_000,
+                leadKm = 500,
+                leadDays = 14,
+                snoozeUntilEpochDay = 20_030,
+                remindersEnabled = true,
+            )
+            repo.saveSchedule(schedule)
+            val inserted = db.dao().schedules("veh-profile").single()
+            db.dao().upsertSchedule(inserted.copy(createdAt = 111L, updatedAt = 111L))
+            repo.saveSchedule(schedule.copy(leadDays = 21))
+            val active = repo.observeApp().first().active!!
+            val petrol = active.fuels.single { it.fuelType == FuelType.PETROL }
+            val lpg = active.fuels.single { it.fuelType == FuelType.LPG }
+            assertEquals("fuel-petrol", petrol.id)
+            assertEquals(55.0, petrol.capacity!!, 0.0)
+            assertEquals(5_600L, petrol.defaultPriceMinor)
+            assertEquals("fuel-lpg", lpg.id)
+            assertEquals("EUR", lpg.currency)
+            assertEquals(2_800L, lpg.defaultPriceMinor)
+            val work = active.serviceRecords.single()
+            assertEquals(past, work.occurredAtMs)
+            assertEquals("Master", work.provider)
+            assertEquals("backdated", work.notes)
+            val stored = active.schedules.single()
+            assertEquals(21, stored.leadDays)
+            assertEquals(20_030L, stored.snoozeUntilEpochDay)
+            assertEquals(20_000L, stored.dueDateEpochDay)
+            val row = db.dao().schedules("veh-profile").single()
+            assertEquals(111L, row.createdAt)
+            assertEquals(21, row.leadDays)
         } finally {
             db.close()
         }

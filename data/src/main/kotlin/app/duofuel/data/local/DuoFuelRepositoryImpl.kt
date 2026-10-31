@@ -289,9 +289,11 @@ class DuoFuelRepositoryImpl(
 
     override suspend fun saveSchedule(schedule: ServiceScheduleCalc) = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
+        val id = schedule.id.ifBlank { UUID.randomUUID().toString() }
+        val previous = dao.schedules(schedule.vehicleId).firstOrNull { it.id == id }
         dao.upsertSchedule(
             ServiceScheduleEntity(
-                id = schedule.id.ifBlank { UUID.randomUUID().toString() },
+                id = id,
                 vehicleId = schedule.vehicleId,
                 serviceType = schedule.serviceType,
                 intervalKm = schedule.intervalKm,
@@ -302,7 +304,7 @@ class DuoFuelRepositoryImpl(
                 leadDays = schedule.leadDays,
                 snoozeUntilEpochDay = schedule.snoozeUntilEpochDay,
                 remindersEnabled = schedule.remindersEnabled,
-                createdAt = now,
+                createdAt = previous?.createdAt ?: now,
                 updatedAt = now,
             ),
         )
