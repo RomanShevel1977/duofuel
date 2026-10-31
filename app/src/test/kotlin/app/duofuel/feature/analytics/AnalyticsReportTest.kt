@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import app.duofuel.ui.theme.DuoFuelTheme
 import java.time.LocalDate
@@ -66,13 +67,13 @@ class AnalyticsReportTest {
         compose.onNodeWithText("Показать последние км").performClick()
         assertEquals(40, lastN)
 
-        compose.onNodeWithText("Показать интервал").performClick()
+        compose.onNodeWithText("Показать интервал").performScrollTo().performClick()
         compose.onAllNodesWithText("дата в формате ГГГГ-ММ-ДД").assertCountEquals(1)
         assertNull(range)
 
-        compose.onNodeWithText("bad-start").performTextReplacement("2026-10-01")
-        compose.onNodeWithText("bad-end").performTextReplacement("2026-10-31")
-        compose.onNodeWithText("Показать интервал").performClick()
+        compose.onNodeWithText("bad-start").performScrollTo().performTextReplacement("2026-10-01")
+        compose.onNodeWithText("bad-end").performScrollTo().performTextReplacement("2026-10-31")
+        compose.onNodeWithText("Показать интервал").performScrollTo().performClick()
         assertEquals(LocalDate.of(2026, 10, 1) to LocalDate.of(2026, 10, 31), range)
     }
 }

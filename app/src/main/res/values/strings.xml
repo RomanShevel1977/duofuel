@@ -180,4 +180,20 @@
     <string name="report_apply_last_n">Показать последние км</string>
     <string name="report_apply_custom">Показать интервал</string>
     <string name="chart_closed">График закрытых циклов</string>
+    <string name="section_amount">Количество и сумма</string>
+    <string name="section_when">Когда и пробег</string>
+    <string name="section_tank">Бак</string>
+    <string name="section_extra">АЗС и чек</string>
+    <string name="section_car">Автомобиль</string>
+    <string name="section_gbo">ГБО</string>
+    <string name="field_optional">Необязательно</string>
+    <string name="hints_title">Подсказки по регламенту</string>
+    <string name="history_empty">В этом разделе пока нет записей.</string>
+    <string name="svc_liquid">Фильтр жидкой фазы</string>
+    <string name="svc_vapor">Фильтр паровой фазы</string>
+    <string name="svc_injectors">Форсунки</string>
+    <string name="svc_reducer">Редуктор</string>
+    <string name="svc_tank">Баллон</string>
+    <string name="svc_valves">Клапанные зазоры</string>
+    <string name="svc_custom">Свой тип</string>
 </resources>
