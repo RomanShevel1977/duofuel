@@ -165,10 +165,8 @@ fun DuoFuelRoot(viewModel: DuoFuelViewModel = hiltViewModel(LocalContext.current
                             events = rate.inputEventIds.joinToString(),
                         )
                     }.orEmpty(),
-                    nearest = state.app.active?.let { snapshotActive ->
-                        report?.nearestService?.let { status ->
-                            status.serviceType + " · " + statusLabel(LocalContext.current, status.status)
-                        }
+                    nearest = state.app.active?.let {
+                        report?.nearestService?.let { status -> nearestSummary(dashContext, status) }
                     },
                     recent = report?.recentEvents?.asReversed()?.map { recentLine(dashContext, it) }.orEmpty(),
                     period = periodKey(state.period),
@@ -543,6 +541,13 @@ private fun HistoryRoute(viewModel: DuoFuelViewModel, onEditFuel: (String) -> Un
                     }
                     }
                 }
+                Text(stringResource(R.string.odometer_log), style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                val readings = snapshot?.odometer.orEmpty().sortedByDescending { it.sortKey() }
+                if (readings.isEmpty()) {
+                    Text(stringResource(R.string.history_empty))
+                } else {
+                    readings.forEach { Text(odometerLine(context, it)) }
+                }
                 Text(stringResource(R.string.odometer_only), style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
                 OutlinedTextField(odometerText, { odometerText = it }, label = { Text(stringResource(R.string.field_odometer)) }, suffix = { Text("км") }, modifier = Modifier.fillMaxWidthField())
                 DateField(odometerDate, { odometerDate = it })
@@ -633,15 +638,6 @@ private fun HistoryRoute(viewModel: DuoFuelViewModel, onEditFuel: (String) -> Un
     }
 }
 
-private val serviceKinds = listOf(
-    "liquid-filter" to R.string.svc_liquid,
-    "vapor-filter" to R.string.svc_vapor,
-    "injectors" to R.string.svc_injectors,
-    "reducer" to R.string.svc_reducer,
-    "tank" to R.string.svc_tank,
-    "valves" to R.string.svc_valves,
-)
-
 @Composable
 private fun ServiceKindChips(selected: String, onSelect: (String) -> Unit) {
     ChipFlow {
@@ -654,11 +650,6 @@ private fun ServiceKindChips(selected: String, onSelect: (String) -> Unit) {
             )
         }
     }
-}
-
-private fun serviceLabel(context: android.content.Context, code: String): String {
-    val label = serviceKinds.firstOrNull { it.first == code }?.second
-    return if (label == null) code else context.getString(label)
 }
 
 private fun applyServiceKind(code: String, setKnown: (String) -> Unit, setCustom: (String) -> Unit) {
@@ -712,6 +703,7 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
     var includeOperating by remember { mutableStateOf(false) }
     var includeGbo by remember { mutableStateOf(false) }
     var editingScheduleId by remember { mutableStateOf<String?>(null) }
+    var scheduleReminders by remember { mutableStateOf(true) }
     var customType by remember { mutableStateOf("") }
     var customWork by remember { mutableStateOf("") }
     var formError by remember { mutableStateOf<String?>(null) }
@@ -742,15 +734,16 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
                 dueKm = schedule.dueOdometerKm?.toString().orEmpty()
                 dueDate = schedule.dueDateEpochDay?.let(Dates::formatEpochDay).orEmpty()
                 snooze = schedule.snoozeUntilEpochDay?.let(Dates::formatEpochDay).orEmpty()
+                scheduleReminders = schedule.remindersEnabled
                 editingScheduleId = schedule.id
             }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text(stringResource(R.string.edit) + " · " + serviceLabel(context, schedule.serviceType))
             }
         }
         state.report?.serviceStatuses?.forEach { status ->
-            Text(serviceLabel(LocalContext.current, status.serviceType) + " · " + statusLabel(LocalContext.current, status.status))
-            Text(stringResource(R.string.forecast) + " 30: " + (status.forecast30.averageKmPerDay?.toPlainString() ?: stringResource(R.string.quality_insufficient)))
-            Text(stringResource(R.string.forecast) + " 90: " + (status.forecast90.averageKmPerDay?.toPlainString() ?: stringResource(R.string.quality_insufficient)))
+            SectionCard {
+                serviceDetailLines(LocalContext.current, status).forEach { Text(it) }
+            }
         }
         ServiceKindChips(type) { chosen ->
             val previous = type
@@ -767,6 +760,7 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
         DateField(dueDate, { dueDate = it }, R.string.field_due_date)
         // OPEN-SOON: дату отсрочки выбирает пользователь. Порог «скоро» сам не включается.
         DateField(snooze, { snooze = it }, R.string.snooze)
+        RowSwitch(stringResource(R.string.schedule_reminders), scheduleReminders) { scheduleReminders = it }
         formError?.let { ErrorText(it) }
         Button(onClick = {
             val numbers = listOf(
@@ -805,7 +799,7 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
                     leadKm = (numbers[2] as? Parse.Ok)?.value,
                     leadDays = (numbers[3] as? Parse.Ok)?.value,
                     snoozeUntilEpochDay = snoozeDay,
-                    remindersEnabled = kept?.remindersEnabled ?: true,
+                    remindersEnabled = scheduleReminders,
                 ),
             )
             formError = null

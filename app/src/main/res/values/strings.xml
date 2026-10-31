@@ -163,6 +163,11 @@
     <string name="edit">Изменить</string>
     <string name="odometer_only">Только пробег</string>
     <string name="panel_reset">Это замена панели</string>
+    <string name="odometer_reset">Замена панели</string>
+    <string name="odometer_log">Шкала пробега</string>
+    <string name="schedule_reminders">Напоминать об этом регламенте</string>
+    <string name="forecast_per_day">%1$s км/день</string>
+    <string name="forecast_days">%1$s дн.</string>
     <string name="reference_ignored">Полезный объём и температура переключения хранятся в профиле и не участвуют в расчёте.</string>
     <string name="report_distance">Расстояние</string>
     <string name="report_fills">Заправки по топливам</string>
