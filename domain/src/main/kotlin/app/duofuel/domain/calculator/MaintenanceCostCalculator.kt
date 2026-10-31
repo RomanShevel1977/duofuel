@@ -67,6 +67,15 @@ class MaintenanceCostCalculator {
         return matches.size > 1 && chosenId == null
     }
 
+    // Несколько регламентов одного типа сдвигаются только явным выбором пользователя.
+    fun scheduleToAdvance(matches: List<ServiceScheduleCalc>, chosenId: String?): String? {
+        return when (matches.size) {
+            0 -> null
+            1 -> matches.single().id
+            else -> matches.firstOrNull { it.id == chosenId }?.id
+        }
+    }
+
     private fun statusOf(
         schedule: ServiceScheduleCalc,
         records: List<ServiceRecordCalc>,

@@ -171,6 +171,18 @@ class RoiAndServiceTest {
     }
 
     @Test
+    fun severalSchedules_advanceOnlyTheChosenOne() {
+        val early = schedule("early")
+        val late = schedule("late")
+        assertNull(maintenance.scheduleToAdvance(listOf(early, late), null))
+        assertNull(maintenance.scheduleToAdvance(listOf(early, late), "missing"))
+        assertEquals("late", maintenance.scheduleToAdvance(listOf(early, late), "late"))
+        assertEquals("early", maintenance.scheduleToAdvance(listOf(early), null))
+        assertEquals("early", maintenance.scheduleToAdvance(listOf(early), "late"))
+        assertNull(maintenance.scheduleToAdvance(emptyList(), "early"))
+    }
+
+    @Test
     fun scheduleWithoutAnchor_isInsufficient() {
         val schedule = ServiceScheduleCalc(
             id = "s", vehicleId = "v", serviceType = "reducer",
@@ -297,6 +309,20 @@ class RoiAndServiceTest {
         total: Long,
     ) = FuelEntryCalc(
         id, "v", FuelType.LPG, at, odo, qty, "L", null, total, "UAH", full, at,
+    )
+
+    private fun schedule(id: String) = ServiceScheduleCalc(
+        id = id,
+        vehicleId = "v",
+        serviceType = "liquid-filter",
+        intervalKm = 8_000,
+        intervalDays = null,
+        dueOdometerKm = null,
+        dueDateEpochDay = null,
+        leadKm = null,
+        leadDays = null,
+        snoozeUntilEpochDay = null,
+        remindersEnabled = true,
     )
 
     private fun reading(id: String, at: Long, km: Int) = OdometerEventCalc(

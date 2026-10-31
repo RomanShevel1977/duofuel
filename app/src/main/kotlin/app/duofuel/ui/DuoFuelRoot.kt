@@ -56,6 +56,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import app.duofuel.R
+import app.duofuel.domain.calculator.MaintenanceCostCalculator
 import app.duofuel.domain.calculator.PeriodRequest
 import app.duofuel.domain.model.CalculationSettingsCalc
 import app.duofuel.domain.model.DashboardReport
@@ -704,6 +705,7 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
     var includeGbo by remember { mutableStateOf(false) }
     var editingScheduleId by remember { mutableStateOf<String?>(null) }
     var scheduleReminders by remember { mutableStateOf(true) }
+    var chosenScheduleId by remember { mutableStateOf<String?>(null) }
     var customType by remember { mutableStateOf("") }
     var customWork by remember { mutableStateOf("") }
     var formError by remember { mutableStateOf<String?>(null) }
@@ -743,6 +745,26 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
         state.report?.serviceStatuses?.forEach { status ->
             SectionCard {
                 serviceDetailLines(LocalContext.current, status).forEach { Text(it) }
+            }
+        }
+        Text(stringResource(R.string.work_history), style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+        val works = state.app.active?.serviceRecords.orEmpty().sortedWith(
+            compareByDescending<ServiceRecordCalc> { it.occurredAtMs }
+                .thenByDescending { it.odometerKm }
+                .thenByDescending { it.createdAtMs }
+                .thenByDescending { it.id },
+        )
+        if (works.isEmpty()) {
+            Text(stringResource(R.string.history_empty))
+        } else {
+            works.forEach { record ->
+                SectionCard {
+                    Text(workHistoryLine(context, record, zone))
+                    val linked = state.app.active?.schedules?.firstOrNull { it.id == record.scheduleId }
+                    if (linked != null) {
+                        Text(stringResource(R.string.linked_schedule, scheduleChoiceLabel(context, linked, null)))
+                    }
+                }
             }
         }
         ServiceKindChips(type) { chosen ->
@@ -825,6 +847,27 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
             }
         }
         RowSwitch(stringResource(R.string.is_gbo), isGbo) { isGbo = it }
+        val storedWorkType = customWork.trim().ifBlank { workType }
+        val workMatches = state.app.active?.schedules.orEmpty().filter { it.serviceType == storedWorkType }
+        if (workMatches.size > 1) {
+            Text(stringResource(R.string.issue_schedule))
+            val choiceLabels = disambiguateLabels(
+                workMatches.map { schedule ->
+                    val status = state.report?.serviceStatuses?.firstOrNull { it.scheduleId == schedule.id }
+                    scheduleChoiceLabel(context, schedule, status)
+                },
+            )
+            ChipFlow {
+                workMatches.forEachIndexed { index, schedule ->
+                    FilterChip(
+                        selected = chosenScheduleId == schedule.id,
+                        onClick = { chosenScheduleId = schedule.id },
+                        label = { Text(choiceLabels[index]) },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    )
+                }
+            }
+        }
         Button(onClick = {
             val money = parseMoney(workCost, currency)
             val km = parseKm(workOdo)
@@ -840,13 +883,13 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
                 ServiceRecordCalc(
                     id = UUID.randomUUID().toString(),
                     vehicleId = vehicleId,
-                    serviceType = customWork.trim().ifBlank { workType },
+                    serviceType = storedWorkType,
                     occurredAtMs = whenMs,
                     odometerKm = km.value,
                     costMinor = money.value,
                     currency = currency,
                     isGbo = isGbo,
-                    scheduleId = state.app.active?.schedules?.singleOrNull { it.serviceType == workType }?.id,
+                    scheduleId = MaintenanceCostCalculator().scheduleToAdvance(workMatches, chosenScheduleId),
                     createdAtMs = System.currentTimeMillis(),
                     provider = provider.ifBlank { null },
                     notes = workNotes.ifBlank { null },
