@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="receipts" />
+        <exclude domain="file" path="archives" />
+        <exclude domain="file" path="exports" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="receipts" />
+        <exclude domain="file" path="archives" />
+        <exclude domain="file" path="exports" />
+    </device-transfer>
+</data-extraction-rules>
