@@ -59,6 +59,8 @@
     <string name="field_generation">Покоління / тип ГБО</string>
     <string name="field_manufacturer">Виробник ГБО</string>
     <string name="field_equipment">Модель обладнання</string>
+    <string name="field_date">Дата</string>
+    <string name="date_hint">РРРР-ММ-ДД</string>
     <string name="field_install_date">Дата встановлення</string>
     <string name="field_install_cost">Вартість встановлення</string>
     <string name="field_useful">Корисний обʼєм, %</string>
@@ -93,6 +95,7 @@
     <string name="issue_number">не число</string>
     <string name="issue_duplicate">таке паливо вже є</string>
     <string name="issue_schedule">оберіть, який регламент зсунути</string>
+    <string name="issue_date">дата у форматі РРРР-ММ-ДД</string>
     <string name="issue_line">%1$s: %2$s</string>
     <string name="receipt">Чек</string>
     <string name="history_fuel">Заправки</string>
@@ -111,6 +114,10 @@
     <string name="lead_km">Упередження, км</string>
     <string name="lead_days">Упередження, дні</string>
     <string name="snooze">Відкласти до</string>
+    <string name="field_due_odo">Пробіг першого строку</string>
+    <string name="field_due_date">Дата першого строку</string>
+    <string name="unit_m3">м³</string>
+    <string name="unit_kg">кг</string>
     <string name="is_gbo">Це робота ГБО</string>
     <string name="expense_category">Категорія витрати</string>
     <string name="include_operating">Включити в експлуатацію</string>

@@ -42,7 +42,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.UUID
 import javax.inject.Inject
 
@@ -256,9 +255,7 @@ fun currentMonth(): PeriodRequest {
     return PeriodRequest.CalendarMonth(today.year, today.monthValue)
 }
 
-fun parseDate(text: String, zone: ZoneId): Long? = runCatching {
-    LocalDate.parse(text.trim(), DateTimeFormatter.ISO_LOCAL_DATE).atStartOfDay(zone).toInstant().toEpochMilli()
-}.getOrNull()
+fun parseDate(text: String, zone: ZoneId): Long? = app.duofuel.domain.validation.Dates.parseStartOfDay(text, zone)
 
 fun parseQuantity(text: String) = InputParsers.quantity(text)
 fun parseKm(text: String) = InputParsers.odometerKm(text)
