@@ -59,10 +59,17 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import app.duofuel.R
 import app.duofuel.domain.calculator.PeriodRequest
+import app.duofuel.domain.model.CalculationSettingsCalc
+import app.duofuel.domain.model.DashboardReport
 import app.duofuel.domain.model.ExpenseCalc
+import app.duofuel.domain.model.FuelConsumptionCard
+import app.duofuel.domain.model.FuelEntryCalc
 import app.duofuel.domain.model.FuelType
 import app.duofuel.domain.model.InputMethod
+import app.duofuel.domain.model.MethodId
+import app.duofuel.domain.model.Metric
 import app.duofuel.domain.model.OdometerKind
+import app.duofuel.domain.model.Period
 import app.duofuel.domain.model.Quality
 import app.duofuel.domain.model.RecentEventRef
 import app.duofuel.domain.model.RoiWindow
@@ -76,6 +83,7 @@ import app.duofuel.domain.validation.FieldCode
 import app.duofuel.domain.validation.IssueCode
 import app.duofuel.domain.validation.Parse
 import app.duofuel.domain.validation.ValidationIssue
+import app.duofuel.feature.analytics.AnalyticsScreen
 import app.duofuel.feature.dashboard.DashboardScreen
 import app.duofuel.feature.dashboard.DuoFuelViewModel
 import app.duofuel.feature.dashboard.MetricUi
@@ -85,15 +93,6 @@ import app.duofuel.feature.dashboard.parseKm
 import app.duofuel.feature.dashboard.parseMoney
 import app.duofuel.feature.dashboard.parseQuantity
 import app.duofuel.feature.dashboard.productOrNull
-import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
-import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
-import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
-import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
-import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
-import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
-import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
 import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDate
@@ -692,6 +691,7 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
         state.report?.serviceStatuses?.forEach { status ->
             Text(status.serviceType + " · " + statusLabel(LocalContext.current, status.status))
             Text(stringResource(R.string.forecast) + " 30: " + (status.forecast30.averageKmPerDay?.toPlainString() ?: stringResource(R.string.quality_insufficient)))
+            Text(stringResource(R.string.forecast) + " 90: " + (status.forecast90.averageKmPerDay?.toPlainString() ?: stringResource(R.string.quality_insufficient)))
         }
         OutlinedTextField(type, { type = it }, label = { Text(stringResource(R.string.service_schedule)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(intervalKm, { intervalKm = it }, label = { Text(stringResource(R.string.interval_km)) }, modifier = Modifier.fillMaxWidthField())
@@ -1039,46 +1039,32 @@ private fun VehicleRoute(viewModel: DuoFuelViewModel) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AnalyticsRoute(viewModel: DuoFuelViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val report = state.report
-    var lastN by remember { mutableStateOf("100") }
-    var start by remember { mutableStateOf(LocalDate.now().minusDays(30).toString()) }
-    var end by remember { mutableStateOf(LocalDate.now().toString()) }
-    val points = report?.closedCycles?.mapNotNull { it.rate.ratePer100 }.orEmpty()
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text(stringResource(R.string.analytics), style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
-        report?.consumptionByFuel?.forEach { card ->
-            Text(card.fuel.name + " · " + (card.rate.ratePer100?.toString() ?: stringResource(R.string.quality_insufficient)) + " · " + card.rate.methodId)
-        }
-        if (report?.unclosed?.isNotEmpty() == true) Text(stringResource(R.string.unclosed))
-        if (points.isEmpty()) {
-            Text(stringResource(R.string.empty_chart))
-        } else {
-            val producer = remember { CartesianChartModelProducer() }
-            LaunchedEffect(points) { producer.runTransaction { lineSeries { series(points) } } }
-            CartesianChartHost(
-                rememberCartesianChart(
-                    rememberLineCartesianLayer(),
-                    startAxis = VerticalAxis.rememberStart(),
-                    bottomAxis = HorizontalAxis.rememberBottom(),
-                ),
-                producer,
-                modifier = Modifier.heightIn(min = 220.dp),
-            )
-        }
-        OutlinedTextField(lastN, { lastN = it }, label = { Text(stringResource(R.string.period_last_n)) })
-        Button(onClick = { lastN.toIntOrNull()?.let { viewModel.setPeriod(PeriodRequest.LastNKm(it)) } }) { Text(stringResource(R.string.period_last_n)) }
-        OutlinedTextField(start, { start = it }, label = { Text(stringResource(R.string.period_custom)) })
-        OutlinedTextField(end, { end = it }, label = { Text(stringResource(R.string.period_custom)) })
-        Button(onClick = {
-            val from = runCatching { LocalDate.parse(start) }.getOrNull()
-            val to = runCatching { LocalDate.parse(end) }.getOrNull()
-            if (from != null && to != null) viewModel.setPeriod(PeriodRequest.Custom(from, to))
-        }) { Text(stringResource(R.string.period_custom)) }
-    }
+    val context = LocalContext.current
+    val today = LocalDate.now()
+    val entries = state.app.active?.entries.orEmpty()
+    val settings = state.app.active?.settings
+    AnalyticsScreen(
+        periodTitle = report?.let { periodTitle(context, it.period.labelKey) } ?: stringResource(R.string.period_month),
+        distanceLine = report?.let { distanceLine(context, it) } ?: stringResource(R.string.quality_insufficient),
+        fillLines = report?.let { fillLines(context, entries, it.period) }.orEmpty(),
+        costLines = report?.let { costLines(context, it) }.orEmpty(),
+        cycleLines = report?.consumptionByFuel?.mapNotNull { cycleLine(context, it) }.orEmpty(),
+        consumptionLines = report?.consumptionByFuel?.map { consumptionLine(context, it) }.orEmpty(),
+        unclosedLines = report?.unclosed?.map { fuelLabel(context, it.fuel) + " · " + context.getString(R.string.unclosed) }.orEmpty(),
+        scenarioLines = report?.let { scenarioLines(context, it, settings) }.orEmpty(),
+        chartPoints = report?.closedCycles?.mapNotNull { cycle ->
+            cycle.rate.ratePer100?.takeIf { cycle.rate.quality == Quality.FACTUAL }
+        }.orEmpty(),
+        periodMismatch = report?.periodMismatch == true,
+        onLastN = { viewModel.setPeriod(PeriodRequest.LastNKm(it)) },
+        onCustom = { start, end -> viewModel.setPeriod(PeriodRequest.Custom(start, end)) },
+        initialStart = today.minusDays(30).toString(),
+        initialEnd = today.toString(),
+    )
 }
 
 @Composable
@@ -1272,6 +1258,134 @@ private fun recentLine(context: android.content.Context, event: RecentEventRef):
     val fuel = event.fuelType?.let { " · " + fuelLabel(context, it) }.orEmpty()
     val km = event.odometerKm?.let { " · $it км" }.orEmpty()
     return Dates.formatDay(event.occurredAtMs, zone) + " " + Dates.formatTime(event.occurredAtMs, zone) + " · " + kind + fuel + km
+}
+
+private fun distanceLine(context: android.content.Context, report: DashboardReport): String {
+    val metric = report.cashflowPerKm
+    val km = metric.distanceKm?.let { context.getString(R.string.report_km, it) }
+    return metricValue(context, metric, km)
+}
+
+private fun fillLines(context: android.content.Context, entries: List<FuelEntryCalc>, period: Period): List<String> {
+    val rows = entries.filter { occurredIn(it.occurredAtMs, period) }
+    return rows.groupBy { it.fuelType to it.unit }
+        .entries
+        .sortedWith(compareBy({ it.key.first.name }, { it.key.second }))
+        .map { (key, group) ->
+            context.getString(
+                R.string.report_fill_line,
+                fuelLabel(context, key.first),
+                group.size,
+                plainQuantity(group.sumOf { it.quantity }),
+                key.second,
+            )
+        }
+}
+
+private fun costLines(context: android.content.Context, report: DashboardReport): List<String> {
+    val cash = metricLine(
+        context,
+        context.getString(R.string.metric_cashflow),
+        report.cashflow.total,
+        moneyText(report.cashflow.total),
+    )
+    val consumed = report.consumptionByFuel.map { card ->
+        metricLine(
+            context,
+            fuelLabel(context, card.fuel) + " · " + context.getString(R.string.report_consumed),
+            card.consumedMoney,
+            moneyText(card.consumedMoney),
+        )
+    }
+    return listOf(cash) + consumed
+}
+
+private fun cycleLine(context: android.content.Context, card: FuelConsumptionCard): String? {
+    val cycle = card.cycle ?: return null
+    val bits = mutableListOf(fuelLabel(context, card.fuel))
+    cycle.distanceKm?.let { bits += context.getString(R.string.report_km, it) }
+    val volume = cycle.volume
+    if (volume.volume != null && volume.volumeUnit != null) {
+        bits += plainQuantity(volume.volume) + " " + volume.volumeUnit
+    }
+    val rate = cycle.rate
+    if (rate.ratePer100 != null && rate.volumeUnit != null) {
+        bits += context.getString(R.string.report_rate, plainQuantity(rate.ratePer100), rate.volumeUnit)
+    }
+    bits += qualityLabel(context, rate.quality)
+    bits += rate.methodId
+    return bits.joinToString(" · ")
+}
+
+private fun consumptionLine(context: android.content.Context, card: FuelConsumptionCard): String {
+    val rate = card.rate
+    val unit = rate.volumeUnit ?: card.volume.volumeUnit
+    val value = if (rate.ratePer100 != null && unit != null) {
+        context.getString(R.string.report_rate, plainQuantity(rate.ratePer100), unit)
+    } else {
+        null
+    }
+    return metricLine(context, fuelLabel(context, card.fuel), rate, value)
+}
+
+private fun scenarioLines(
+    context: android.content.Context,
+    report: DashboardReport,
+    settings: CalculationSettingsCalc?,
+): List<String> {
+    val saving = report.saving
+    val baselineRate = settings?.baselinePetrolL100?.takeIf { it > 0.0 }?.let {
+        plainQuantity(it) + " " + context.getString(R.string.report_l100)
+    }
+    // Ручной базовый расход — оценочный, пока его не заменил фактический бензиновый цикл.
+    val baseline = manualLine(context, context.getString(R.string.report_baseline_rate), baselineRate, MethodId.BASELINE_PETROL.id)
+    val priceValue = settings?.petrolPriceMinor?.let { minor ->
+        settings.petrolPriceCurrency?.let { formatMinor(minor, it, java.util.Locale.getDefault()) }
+    }
+    val price = if (saving.priceIsScenario) {
+        manualLine(context, context.getString(R.string.scenario_price), priceValue, MethodId.BASELINE_PETROL.id)
+    } else {
+        null
+    }
+    return listOfNotNull(
+        baseline,
+        price,
+        metricLine(
+            context,
+            context.getString(R.string.factual_price),
+            saving.factualAveragePetrolPrice,
+            moneyText(saving.factualAveragePetrolPrice),
+        ),
+        metricLine(context, context.getString(R.string.report_gbo), saving.actual, moneyText(saving.actual)),
+        metricLine(context, context.getString(R.string.metric_saving), saving.net, moneyText(saving.net)),
+    )
+}
+
+private fun metricLine(context: android.content.Context, title: String, metric: Metric, value: String?): String =
+    "$title · " + metricValue(context, metric, value)
+
+private fun metricValue(context: android.content.Context, metric: Metric, value: String?): String {
+    val quality = qualityLabel(context, metric.quality)
+    val shown = if (value == null) quality else "$value · $quality"
+    return "$shown · ${metric.methodId}"
+}
+
+private fun manualLine(context: android.content.Context, title: String, value: String?, methodId: String): String {
+    val quality = context.getString(if (value == null) R.string.quality_insufficient else R.string.quality_estimated)
+    val shown = if (value == null) quality else "$value · $quality"
+    return "$title · $shown · $methodId"
+}
+
+private fun moneyText(metric: Metric): String? {
+    val minor = metric.moneyMinor ?: return null
+    val currency = metric.currency ?: return null
+    return formatMinor(minor, currency, java.util.Locale.getDefault())
+}
+
+private fun occurredIn(at: Long, period: Period): Boolean {
+    val start = period.startInclusiveMs
+    val end = period.endExclusiveMs
+    return (start == null || at >= start) && (end == null || at < end)
 }
 
 private fun Modifier.fillMaxWidthField(): Modifier = fillMaxWidth()

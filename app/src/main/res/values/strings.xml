@@ -164,4 +164,20 @@
     <string name="odometer_only">Только пробег</string>
     <string name="panel_reset">Это замена панели</string>
     <string name="reference_ignored">Полезный объём и температура переключения хранятся в профиле и не участвуют в расчёте.</string>
+    <string name="report_distance">Расстояние</string>
+    <string name="report_fills">Заправки по топливам</string>
+    <string name="report_costs">Затраты</string>
+    <string name="report_cycles">Контрольные циклы</string>
+    <string name="report_consumption">Расход</string>
+    <string name="report_scenario">Бензиновый сценарий</string>
+    <string name="report_gbo">Затраты ГБО</string>
+    <string name="report_baseline_rate">Базовый расход</string>
+    <string name="report_consumed">Потреблённое</string>
+    <string name="report_fill_line">%1$s · %2$d · %3$s %4$s</string>
+    <string name="report_km">%1$d км</string>
+    <string name="report_rate">%1$s %2$s/100</string>
+    <string name="report_l100">л/100 км</string>
+    <string name="report_apply_last_n">Показать последние км</string>
+    <string name="report_apply_custom">Показать интервал</string>
+    <string name="chart_closed">График закрытых циклов</string>
 </resources>
