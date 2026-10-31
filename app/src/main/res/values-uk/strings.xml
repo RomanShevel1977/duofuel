@@ -167,6 +167,8 @@
     <string name="schedule_reminders">Нагадувати про цей регламент</string>
     <string name="forecast_per_day">%1$s км/день</string>
     <string name="forecast_days">%1$s дн.</string>
+    <string name="work_history">Історія робіт</string>
+    <string name="linked_schedule">Регламент: %1$s</string>
     <string name="reference_ignored">Корисний обʼєм і температура перемикання зберігаються в профілі й не беруть участі в розрахунку.</string>
     <string name="report_distance">Відстань</string>
     <string name="report_fills">Заправки за паливом</string>

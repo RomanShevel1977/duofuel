@@ -14,9 +14,13 @@ import app.duofuel.domain.model.Quality
 import app.duofuel.domain.model.RecordSource
 import app.duofuel.domain.model.ScheduleStatus
 import app.duofuel.domain.model.ServiceDueStatus
+import app.duofuel.domain.model.ServiceRecordCalc
+import app.duofuel.domain.model.ServiceScheduleCalc
 import app.duofuel.ui.theme.DuoFuelTheme
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.ZoneOffset
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -94,5 +98,75 @@ class ServiceReadoutTest {
         compose.onAllNodesWithText("Прогноз, не срок 30: Недостаточно данных").assertCountEquals(1)
         compose.onAllNodesWithText("1200 км · Замена панели", substring = true).assertCountEquals(1)
         compose.onAllNodesWithText("50 км · Показание", substring = true).assertCountEquals(1)
+    }
+
+    @Test
+    fun scheduleChoice_namesEachRegimen_andSameLabelsGetAnIndex() {
+        val early = ServiceScheduleCalc(
+            id = "early",
+            vehicleId = "v",
+            serviceType = "liquid-filter",
+            intervalKm = 8_000,
+            intervalDays = null,
+            dueOdometerKm = 18_000,
+            dueDateEpochDay = null,
+            leadKm = null,
+            leadDays = null,
+            snoozeUntilEpochDay = null,
+            remindersEnabled = true,
+        )
+        val late = early.copy(id = "late", intervalKm = 10_000, dueOdometerKm = 22_000)
+        val twin = early.copy(id = "twin")
+        val pending = ScheduleStatus(
+            scheduleId = "early",
+            serviceType = "liquid-filter",
+            status = ServiceDueStatus.PENDING,
+            dueOdometerKm = 18_000,
+            dueEpochDay = null,
+            snoozeUntilEpochDay = null,
+            forecast30 = MileageForecast(30, null, null, null, Quality.INSUFFICIENT),
+            forecast90 = MileageForecast(90, null, null, null, Quality.INSUFFICIENT),
+        )
+        val record = ServiceRecordCalc(
+            id = "w",
+            vehicleId = "v",
+            serviceType = "liquid-filter",
+            occurredAtMs = 0L,
+            odometerKm = 12_000,
+            costMinor = 15000,
+            currency = "UAH",
+            isGbo = true,
+            scheduleId = "early",
+            createdAtMs = 1L,
+        )
+        compose.setContent {
+            val context = LocalContext.current
+            DuoFuelTheme {
+                Column {
+                    Text(scheduleChoiceLabel(context, early, pending))
+                    Text(scheduleChoiceLabel(context, late, null))
+                    Text(workHistoryLine(context, record, ZoneOffset.UTC))
+                    disambiguateLabels(
+                        listOf(
+                            scheduleChoiceLabel(context, early, null),
+                            scheduleChoiceLabel(context, twin, null),
+                        ),
+                    ).forEach { Text(it) }
+                }
+            }
+        }
+        compose.onAllNodesWithText("Фильтр жидкой фазы · Ожидается · 8000 км · 18000 км").assertCountEquals(1)
+        compose.onAllNodesWithText("Фильтр жидкой фазы · 10000 км · 22000 км").assertCountEquals(1)
+        compose.onAllNodesWithText("12000 км", substring = true).assertCountEquals(1)
+        compose.onAllNodesWithText("Это работа ГБО", substring = true).assertCountEquals(1)
+        compose.onAllNodesWithText("Фильтр жидкой фазы · 8000 км · 18000 км · 1").assertCountEquals(1)
+        compose.onAllNodesWithText("Фильтр жидкой фазы · 8000 км · 18000 км · 2").assertCountEquals(1)
+    }
+}
+
+class ScheduleLabelOrderTest {
+    @Test
+    fun disambiguateLabels_leavesUniqueTextAlone() {
+        assertEquals(listOf("a", "b"), disambiguateLabels(listOf("a", "b")))
     }
 }
