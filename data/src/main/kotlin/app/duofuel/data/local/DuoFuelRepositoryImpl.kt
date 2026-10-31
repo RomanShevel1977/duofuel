@@ -460,20 +460,27 @@ class DuoFuelRepositoryImpl(
         }
     }
 
+    // OPEN-BACKUP: тот же UUID с другим содержимым — конфликт. Совпадающая запись конфликтом не считается.
     private fun conflicts(current: ExportBundle, incoming: JSONObject): List<ArchiveConflict> {
         val found = mutableListOf<ArchiveConflict>()
-        fun check(entity: String, currentIds: Map<String, String>, rows: JSONArray?) {
+        fun check(entity: String, stored: Map<String, org.json.JSONObject>, rows: org.json.JSONArray?) {
             if (rows == null) return
             for (index in 0 until rows.length()) {
                 val row = rows.getJSONObject(index)
                 val id = row.getString("id")
-                val canonical = row.toString()
-                val existing = currentIds[id] ?: continue
-                if (existing != canonical) found += ArchiveConflict(id, entity)
+                val existing = stored[id] ?: continue
+                if (!ArchiveCodec.sameRecord(existing, row)) found += ArchiveConflict(id, entity)
             }
         }
-        check("vehicle", current.vehicles.associate { it.id to vehicleJsonPublic(it) }, incoming.optJSONArray("vehicles"))
-        check("fuel", current.fuel.associate { it.id to fuelJsonPublic(it) }, incoming.optJSONArray("fuelEntries"))
+        check("vehicle", current.vehicles.associate { it.id to ArchiveCodec.vehicleJson(it) }, incoming.optJSONArray("vehicles"))
+        check("fuelConfig", current.fuels.associate { it.id to ArchiveCodec.fuelConfigJson(it) }, incoming.optJSONArray("fuels"))
+        check("fuel", current.fuel.associate { it.id to ArchiveCodec.fuelJson(it) }, incoming.optJSONArray("fuelEntries"))
+        check("odometer", current.odometer.associate { it.id to ArchiveCodec.odoJson(it) }, incoming.optJSONArray("odometer"))
+        check("service", current.service.associate { it.id to ArchiveCodec.serviceJson(it) }, incoming.optJSONArray("service"))
+        check("schedule", current.schedules.associate { it.id to ArchiveCodec.scheduleJson(it) }, incoming.optJSONArray("schedules"))
+        check("expense", current.expenses.associate { it.id to ArchiveCodec.expenseJson(it) }, incoming.optJSONArray("expenses"))
+        check("settings", current.settings.associate { it.id to ArchiveCodec.settingsJson(it) }, incoming.optJSONArray("settings"))
+        check("attachment", current.attachments.associate { it.id to ArchiveCodec.attachmentJson(it) }, incoming.optJSONArray("attachments"))
         return found
     }
 
@@ -489,8 +496,9 @@ class DuoFuelRepositoryImpl(
         }
         val fuels = data.optJSONArray("fuels")
         if (fuels != null) {
+            val knownFuels = current.fuels.map { it.id }.toSet()
             val entities = (0 until fuels.length()).map { fuels.getJSONObject(it).toFuelConfig() }
-                .filter { dao.vehicle(it.vehicleId) != null }
+                .filter { it.id !in conflictIds && it.id !in knownFuels && dao.vehicle(it.vehicleId) != null }
             if (entities.isNotEmpty()) dao.upsertFuels(entities)
         }
         val fuelEntries = data.optJSONArray("fuelEntries")
@@ -552,10 +560,6 @@ class DuoFuelRepositoryImpl(
 private fun countRows(data: JSONObject): Int =
     listOf("vehicles", "fuels", "fuelEntries", "odometer", "service", "schedules", "expenses", "settings")
         .sumOf { data.optJSONArray(it)?.length() ?: 0 }
-
-private fun vehicleJsonPublic(it: VehicleEntity): String = it.id + "|" + it.name + "|" + it.updatedAt
-private fun fuelJsonPublic(it: FuelEntryEntity): String =
-    it.id + "|" + it.quantity + "|" + it.odometerKm + "|" + it.totalCostMinor + "|" + it.updatedAt
 
 private fun JSONObject.toVehicle() = VehicleEntity(
     id = getString("id"),

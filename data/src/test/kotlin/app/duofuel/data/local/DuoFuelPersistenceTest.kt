@@ -17,6 +17,7 @@ import app.duofuel.domain.repository.FuelEntryDraft
 import app.duofuel.domain.repository.VehicleProfile
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -131,6 +132,76 @@ class DuoFuelPersistenceTest {
             assertEquals(false, active.expenses.single().includeInGbo)
         } finally {
             second.close()
+        }
+    }
+
+    @Test
+    fun archive_sameBytesAreNotAConflict_andChangedBytesStayPut() = runBlocking {
+        val name = "duofuel-archive.db"
+        context.deleteDatabase(name)
+        val db = open(name)
+        try {
+            val repo = DuoFuelRepositoryImpl(db.dao(), context)
+            val at = 1_700_000_000_000L
+            repo.saveVehicle(
+                profile("veh-1", at),
+                listOf(FuelConfigProfile("fuel-lpg", FuelType.LPG, "L", 42.0, "UAH", 2_700)),
+                CalculationSettingsCalc(null, null, "UAH", true, false),
+            )
+            repo.saveFuel(
+                FuelEntryDraft(
+                    id = "fill-1",
+                    vehicleId = "veh-1",
+                    fuelType = FuelType.LPG,
+                    occurredAtMs = at,
+                    odometerKm = 1_000,
+                    inputMethod = InputMethod.ABSOLUTE,
+                    odometerKind = OdometerKind.READING,
+                    quantity = 20.5,
+                    unit = "L",
+                    unitPriceMinor = 2_700,
+                    totalCostMinor = 55_350,
+                    currency = "UAH",
+                    isFull = true,
+                    station = "OKKO",
+                    notes = null,
+                    receiptUri = null,
+                    extraAttachmentUris = emptyList(),
+                ),
+            )
+            repo.saveService(
+                ServiceRecordCalc(
+                    id = "svc-1",
+                    vehicleId = "veh-1",
+                    serviceType = "liquid-filter",
+                    occurredAtMs = at,
+                    odometerKm = 1_000,
+                    costMinor = 80_000,
+                    currency = "UAH",
+                    isGbo = true,
+                    scheduleId = null,
+                    createdAtMs = at,
+                ),
+                provider = "Master",
+                notes = null,
+            )
+            val archive = repo.exportArchive(includeAttachments = false)
+            assertEquals(0, repo.previewArchive(archive).conflicts.size)
+            repo.applyArchive(archive)
+            assertEquals(20.5, repo.observeApp().first().active!!.entries.single().quantity, 0.0)
+
+            val changed = rewriteArchive(archive) { data ->
+                data.getJSONArray("fuelEntries").getJSONObject(0).put("quantity", 99.0)
+                data.getJSONArray("service").getJSONObject(0).put("notes", "other")
+            }
+            val conflicts = repo.previewArchive(changed).conflicts.map { it.id }.toSet()
+            assertEquals(setOf("fill-1", "svc-1"), conflicts)
+            repo.applyArchive(changed)
+            val active = repo.observeApp().first().active!!
+            assertEquals(20.5, active.entries.single().quantity, 0.0)
+            assertEquals(null, active.serviceRecords.single().notes)
+        } finally {
+            db.close()
         }
     }
 
@@ -390,6 +461,21 @@ class DuoFuelPersistenceTest {
         createdAtMs = at,
         updatedAtMs = at,
     )
+
+    private fun rewriteArchive(bytes: ByteArray, edit: (JSONObject) -> Unit): ByteArray {
+        val files = unzip(bytes)
+        val data = JSONObject(files.getValue("data.json"))
+        edit(data)
+        val dataBytes = data.toString().toByteArray()
+        val manifest = JSONObject(files.getValue("manifest.json"))
+        manifest.put("checksumSha256", sha256(dataBytes))
+        return zipOfBytes(
+            mapOf(
+                "manifest.json" to manifest.toString().toByteArray(),
+                "data.json" to dataBytes,
+            ),
+        )
+    }
 
     private fun unzip(bytes: ByteArray): Map<String, String> {
         val out = linkedMapOf<String, String>()

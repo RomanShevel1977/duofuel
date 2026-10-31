@@ -125,6 +125,26 @@ class FuelCycleCalculatorTest {
     }
 
     @Test
+    fun periodWithoutLevels_keepsTheCycleOffThePeriodConsumption() {
+        val entries = listOf(
+            fuel("open", 1, 0, 40.0, true, 100),
+            fuel("close", 2, 300, 30.0, true, 3_000),
+        )
+        val history = dashboard.calculate(input(entries), PeriodRequest.AllHistory, zone, LocalDate.of(2026, 10, 30), 30)
+        val card = history.consumptionByFuel.single()
+        assertEquals(Quality.INSUFFICIENT, card.rate.quality)
+        assertNull(card.rate.ratePer100)
+        assertTrue(card.rate.warnings.contains(WarningCode.UNKNOWN_LEVEL_NOT_ZERO))
+        assertEquals(Quality.FACTUAL, history.closedCycles.single().rate.quality)
+        assertEquals(10.0, history.closedCycles.single().rate.ratePer100!!, 1e-9)
+        assertEquals(3_100L, history.cashflow.total.moneyMinor)
+        assertEquals(Quality.INSUFFICIENT, history.fuelCostPerKm.quality)
+        val control = dashboard.calculate(input(entries), PeriodRequest.LatestControlCycles, zone, LocalDate.of(2026, 10, 30), 30)
+        assertEquals(Quality.FACTUAL, control.consumptionByFuel.single().rate.quality)
+        assertEquals(10.0, control.consumptionByFuel.single().rate.ratePer100!!, 1e-9)
+    }
+
+    @Test
     fun paymentsWithoutLevels_showCashflowNotConsumed() {
         val entries = listOf(
             fuel("only", 5, 10, 12.0, false, 2_500),
@@ -195,8 +215,11 @@ class FuelCycleCalculatorTest {
         )
         val report = dashboard.calculate(input(entries), PeriodRequest.AllHistory, zone, LocalDate.of(2026, 10, 30), 40)
         assertEquals(7_000L, report.cashflow.total.moneyMinor)
-        assertEquals(3_000L, report.consumptionByFuel.single().consumedMoney.moneyMinor)
-        assertTrue(report.periodMismatch || report.cashflowPerKm.distanceKm != report.fuelCostPerKm.distanceKm || report.cashflow.total.moneyMinor != report.fuelCostPerKm.moneyMinor)
+        assertNull(report.consumptionByFuel.single().consumedMoney.moneyMinor)
+        assertEquals(3_000L, report.closedCycles.single().consumedMoney.moneyMinor)
+        val cycleView = dashboard.calculate(input(entries), PeriodRequest.LatestControlCycles, zone, LocalDate.of(2026, 10, 30), 40)
+        assertEquals(3_000L, cycleView.consumptionByFuel.single().consumedMoney.moneyMinor)
+        assertTrue(report.cashflow.total.moneyMinor != report.fuelCostPerKm.moneyMinor)
     }
 
     @Test
