@@ -51,6 +51,7 @@ data class ScreenState(
     val report: DashboardReport? = null,
     val ready: Boolean = false,
     val notice: String? = null,
+    val noticeUndo: Boolean = false,
     val openRefuel: Boolean = false,
 )
 
@@ -79,7 +80,7 @@ class DuoFuelViewModel @Inject constructor(
         _state.update { it.copy(period = period, report = active?.let { snapshot -> report(snapshot, period) }) }
     }
 
-    fun clearNotice() = _state.update { it.copy(notice = null) }
+    fun clearNotice() = _state.update { it.copy(notice = null, noticeUndo = false) }
 
     fun saveVehicle(
         profile: VehicleProfile,
@@ -123,9 +124,11 @@ class DuoFuelViewModel @Inject constructor(
         issues += OdometerValidator.check(candidate, existing, confirmDecrease, confirmChronology)
         if (issues.any { it.blocking }) return issues.filter { it.blocking }.map { issueText(context, it) }
         val stored = if (confirmDecrease) draft.copy(odometerKind = OdometerKind.RESET) else draft
+        val inserting = stored.id == null
         viewModelScope.launch {
             repository.saveFuel(stored)
-            _state.update { it.copy(notice = context.getString(app.duofuel.R.string.saved)) }
+            // OPEN-UNDO: «Отменить» только у только что вставленной заправки, не у правки и не у других сообщений.
+            _state.update { it.copy(notice = context.getString(app.duofuel.R.string.saved), noticeUndo = inserting) }
         }
         return emptyList()
     }
@@ -213,7 +216,7 @@ class DuoFuelViewModel @Inject constructor(
 
     fun restore(id: String) {
         if (_state.value.app.active != null) {
-            _state.update { it.copy(notice = context.getString(app.duofuel.R.string.one_vehicle)) }
+            _state.update { it.copy(notice = context.getString(app.duofuel.R.string.one_vehicle), noticeUndo = false) }
             return
         }
         viewModelScope.launch { repository.restoreVehicle(id) }

@@ -57,19 +57,33 @@ class DuoFuelRepositoryImpl(
                 ) { fuels, entries, odometer, service, schedules ->
                     listOf(fuels, entries, odometer, service, schedules)
                 }
-                combine(head, dao.observeExpenses(vehicle.id), dao.observeSettings(vehicle.id)) { parts, expenses, settings ->
+                combine(
+                    head,
+                    dao.observeExpenses(vehicle.id),
+                    dao.observeSettings(vehicle.id),
+                    dao.observeAttachments(),
+                ) { parts, expenses, settings, attachments ->
                     val fuels = parts[0] as List<FuelTypeConfigEntity>
                     val entries = parts[1] as List<FuelEntryEntity>
                     val odometer = parts[2] as List<OdometerEventEntity>
                     val service = parts[3] as List<ServiceRecordEntity>
                     val schedules = parts[4] as List<ServiceScheduleEntity>
+                    val byOwner = attachments.groupBy { it.ownerType to it.ownerId }
+                    val uris = { type: String, id: String ->
+                        byOwner[type to id].orEmpty().map { it.localUri }.distinct()
+                    }
                     AppState(
                         active = VehicleSnapshot(
                             vehicle = vehicle.toProfile(),
                             fuels = fuels.map { it.toProfile() },
-                            entries = entries.map { it.toCalc() },
+                            entries = entries.map { entity ->
+                                val extras = uris("FUEL", entity.id).filter { it != entity.receiptUri }
+                                entity.toCalc().copy(extraAttachmentUris = extras)
+                            },
                             odometer = odometer.map { it.toCalc() },
-                            serviceRecords = service.map { it.toCalc() },
+                            serviceRecords = service.map { entity ->
+                                entity.toCalc().copy(attachmentUris = uris("SERVICE", entity.id))
+                            },
                             schedules = schedules.map { it.toCalc() },
                             expenses = expenses.map { it.toCalc() },
                             settings = settings.toCalc(),
@@ -203,9 +217,10 @@ class DuoFuelRepositoryImpl(
                 updatedAt = now,
             ),
         )
+        // OPEN-PHOTO: основной чек и дополнительные снимки. Один URI не пишется дважды.
+        dao.deleteAttachments("FUEL", id)
         val receipt = draft.receiptUri
         if (receipt != null) {
-            dao.deleteAttachments("FUEL", id)
             dao.upsertAttachment(
                 AttachmentEntity(
                     id = UUID.randomUUID().toString(),
@@ -217,8 +232,8 @@ class DuoFuelRepositoryImpl(
                 ),
             )
         }
-        draft.extraAttachmentUris.forEach { uri ->
-            if (uri != draft.receiptUri) {
+        draft.extraAttachmentUris.distinct().forEach { uri ->
+            if (uri.isNotBlank() && uri != receipt) {
                 dao.upsertAttachment(
                     AttachmentEntity(UUID.randomUUID().toString(), "FUEL", id, uri, "image/*", now),
                 )
@@ -267,9 +282,10 @@ class DuoFuelRepositoryImpl(
     override suspend fun saveService(record: ServiceRecordCalc, provider: String?, notes: String?) =
         withContext(Dispatchers.IO) {
             val now = System.currentTimeMillis()
+            val serviceId = record.id.ifBlank { UUID.randomUUID().toString() }
             dao.upsertService(
                 ServiceRecordEntity(
-                    id = record.id.ifBlank { UUID.randomUUID().toString() },
+                    id = serviceId,
                     vehicleId = record.vehicleId,
                     serviceType = record.serviceType,
                     occurredAt = record.occurredAtMs,
@@ -284,6 +300,14 @@ class DuoFuelRepositoryImpl(
                     updatedAt = now,
                 ),
             )
+            dao.deleteAttachments("SERVICE", serviceId)
+            record.attachmentUris.distinct().forEach { uri ->
+                if (uri.isNotBlank()) {
+                    dao.upsertAttachment(
+                        AttachmentEntity(UUID.randomUUID().toString(), "SERVICE", serviceId, uri, "image/*", now),
+                    )
+                }
+            }
             refreshCache(record.vehicleId)
         }
 
@@ -339,6 +363,7 @@ class DuoFuelRepositoryImpl(
 
     override suspend fun deleteService(id: String) = withContext(Dispatchers.IO) {
         val row = dao.allService().firstOrNull { it.id == id } ?: return@withContext
+        dao.deleteAttachments("SERVICE", id)
         dao.deleteService(id)
         refreshCache(row.vehicleId)
     }

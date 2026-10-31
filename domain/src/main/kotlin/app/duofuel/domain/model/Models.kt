@@ -92,6 +92,7 @@ data class FuelEntryCalc(
     val station: String? = null,
     val notes: String? = null,
     val receiptUri: String? = null,
+    val extraAttachmentUris: List<String> = emptyList(),
 ) {
     fun sortKey(): SortKey = SortKey(occurredAtMs, odometerKm, createdAtMs, id)
 }
@@ -123,6 +124,7 @@ data class ServiceRecordCalc(
     val createdAtMs: Long,
     val provider: String? = null,
     val notes: String? = null,
+    val attachmentUris: List<String> = emptyList(),
 )
 
 data class ServiceScheduleCalc(

@@ -145,6 +145,9 @@ interface DuoFuelDao {
     suspend fun attachments(ownerType: String, ownerId: String): List<AttachmentEntity>
 
     @Query("SELECT * FROM attachments")
+    fun observeAttachments(): Flow<List<AttachmentEntity>>
+
+    @Query("SELECT * FROM attachments")
     suspend fun allAttachments(): List<AttachmentEntity>
 
     @Query("DELETE FROM attachments WHERE ownerType = :ownerType AND ownerId = :ownerId")
