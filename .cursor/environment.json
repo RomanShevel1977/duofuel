@@ -1,0 +1,4 @@
+{
+  "name": "duofuel",
+  "install": "set -euo pipefail\ntest -f README.md\necho \"duofuel: repository has no dependencies to install\""
+}
