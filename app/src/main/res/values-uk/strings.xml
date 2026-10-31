@@ -179,4 +179,20 @@
     <string name="report_apply_last_n">Показати останні км</string>
     <string name="report_apply_custom">Показати інтервал</string>
     <string name="chart_closed">Графік закритих циклів</string>
+    <string name="section_amount">Кількість і сума</string>
+    <string name="section_when">Коли і пробіг</string>
+    <string name="section_tank">Бак</string>
+    <string name="section_extra">АЗС і чек</string>
+    <string name="section_car">Автомобіль</string>
+    <string name="section_gbo">ГБО</string>
+    <string name="field_optional">Необовʼязково</string>
+    <string name="hints_title">Підказки щодо регламенту</string>
+    <string name="history_empty">У цьому розділі поки немає записів.</string>
+    <string name="svc_liquid">Фільтр рідкої фази</string>
+    <string name="svc_vapor">Фільтр парової фази</string>
+    <string name="svc_injectors">Форсунки</string>
+    <string name="svc_reducer">Редуктор</string>
+    <string name="svc_tank">Балон</string>
+    <string name="svc_valves">Клапанні зазори</string>
+    <string name="svc_custom">Свій тип</string>
 </resources>

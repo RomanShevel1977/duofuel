@@ -1,12 +1,7 @@
 package app.duofuel.feature.analytics
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -21,6 +16,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.duofuel.R
+import app.duofuel.ui.ErrorText
+import app.duofuel.ui.ScreenPage
+import app.duofuel.ui.SectionCard
+import app.duofuel.ui.WideButton
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
@@ -56,7 +55,7 @@ fun AnalyticsScreen(
     var start by remember { mutableStateOf(initialStart) }
     var end by remember { mutableStateOf(initialEnd) }
     var formError by remember { mutableStateOf<String?>(null) }
-    Column(modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+    ScreenPage(modifier) {
         Text(stringResource(R.string.analytics), style = MaterialTheme.typography.headlineSmall)
         Text(periodTitle, style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(
@@ -65,20 +64,17 @@ fun AnalyticsScreen(
             label = { Text(stringResource(R.string.period_last_n)) },
             modifier = Modifier.fillMaxWidth(),
         )
-        Button(
-            onClick = {
-                val parsed = lastN.toIntOrNull()
-                when {
-                    parsed == null -> formError = context.getString(R.string.issue_number)
-                    parsed <= 0 -> formError = context.getString(R.string.issue_positive)
-                    else -> {
-                        formError = null
-                        onLastN(parsed)
-                    }
+        WideButton(stringResource(R.string.report_apply_last_n), onClick = {
+            val parsed = lastN.toIntOrNull()
+            when {
+                parsed == null -> formError = context.getString(R.string.issue_number)
+                parsed <= 0 -> formError = context.getString(R.string.issue_positive)
+                else -> {
+                    formError = null
+                    onLastN(parsed)
                 }
-            },
-            modifier = Modifier.heightIn(min = 48.dp),
-        ) { Text(stringResource(R.string.report_apply_last_n)) }
+            }
+        })
         OutlinedTextField(
             start,
             { start = it },
@@ -93,20 +89,17 @@ fun AnalyticsScreen(
             supportingText = { Text(stringResource(R.string.date_hint)) },
             modifier = Modifier.fillMaxWidth(),
         )
-        Button(
-            onClick = {
-                val from = runCatching { LocalDate.parse(start) }.getOrNull()
-                val to = runCatching { LocalDate.parse(end) }.getOrNull()
-                if (from == null || to == null || to < from) {
-                    formError = context.getString(R.string.issue_date)
-                } else {
-                    formError = null
-                    onCustom(from, to)
-                }
-            },
-            modifier = Modifier.heightIn(min = 48.dp),
-        ) { Text(stringResource(R.string.report_apply_custom)) }
-        formError?.let { Text(it) }
+        WideButton(stringResource(R.string.report_apply_custom), onClick = {
+            val from = runCatching { LocalDate.parse(start) }.getOrNull()
+            val to = runCatching { LocalDate.parse(end) }.getOrNull()
+            if (from == null || to == null || to < from) {
+                formError = context.getString(R.string.issue_date)
+            } else {
+                formError = null
+                onCustom(from, to)
+            }
+        })
+        formError?.let { ErrorText(it) }
         if (periodMismatch) Text(stringResource(R.string.period_mismatch))
         Section(stringResource(R.string.report_distance), listOf(distanceLine))
         Section(stringResource(R.string.report_fills), fillLines)
@@ -114,8 +107,9 @@ fun AnalyticsScreen(
         Section(stringResource(R.string.report_cycles), cycleLines)
         Section(stringResource(R.string.report_consumption), consumptionLines)
         if (unclosedLines.isNotEmpty()) {
-            Text(stringResource(R.string.unclosed), style = MaterialTheme.typography.titleMedium)
-            unclosedLines.forEach { Text(it) }
+            SectionCard(stringResource(R.string.unclosed)) {
+                unclosedLines.forEach { Text(it, style = MaterialTheme.typography.bodyLarge) }
+            }
         }
         Section(stringResource(R.string.report_scenario), scenarioLines)
         Text(stringResource(R.string.chart_closed), style = MaterialTheme.typography.titleMedium)
@@ -139,10 +133,11 @@ fun AnalyticsScreen(
 
 @Composable
 private fun Section(title: String, lines: List<String>) {
-    Text(title, style = MaterialTheme.typography.titleMedium)
-    if (lines.isEmpty()) {
-        Text(stringResource(R.string.quality_insufficient))
-    } else {
-        lines.forEach { Text(it) }
+    SectionCard(title) {
+        if (lines.isEmpty()) {
+            Text(stringResource(R.string.quality_insufficient), style = MaterialTheme.typography.bodyLarge)
+        } else {
+            lines.forEach { Text(it, style = MaterialTheme.typography.bodyLarge) }
+        }
     }
 }

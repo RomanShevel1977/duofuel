@@ -5,13 +5,12 @@ package app.duofuel.feature.dashboard
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +25,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.duofuel.R
+import app.duofuel.ui.ChipFlow
+import app.duofuel.ui.ScreenPage
+import app.duofuel.ui.SectionCard
 
 data class MetricUi(
     val title: String,
@@ -50,25 +52,29 @@ fun DashboardScreen(
     modifier: Modifier = Modifier,
 ) {
     var selected by rememberSaveable { mutableStateOf<Int?>(null) }
-    Column(
-        modifier.verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    ScreenPage(modifier) {
         Text(vehicleName, style = MaterialTheme.typography.headlineSmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ChipFlow {
             listOf(
                 "month" to stringResource(R.string.period_month),
                 "cycle" to stringResource(R.string.period_cycle),
                 "all" to stringResource(R.string.period_all),
             ).forEach { (key, label) ->
-                FilterChip(selected = period == key, onClick = { onPeriod(key) }, label = { Text(label) }, modifier = Modifier.heightIn(min = 48.dp))
+                FilterChip(
+                    selected = period == key,
+                    onClick = { onPeriod(key) },
+                    label = { Text(label) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                )
             }
         }
         if (empty) {
-            Text(stringResource(R.string.dashboard_empty))
+            SectionCard {
+                Text(stringResource(R.string.dashboard_empty), style = MaterialTheme.typography.bodyLarge)
+            }
         }
         if (periodMismatch) {
-            Text(stringResource(R.string.period_mismatch))
+            Text(stringResource(R.string.period_mismatch), color = MaterialTheme.colorScheme.error)
         }
         metrics.forEachIndexed { index, metric ->
             MetricBlock(metric) { selected = index }
@@ -76,14 +82,16 @@ fun DashboardScreen(
         consumption.forEachIndexed { index, card ->
             MetricBlock(card) { selected = metrics.size + index }
         }
-        Text(stringResource(R.string.nearest_service), style = MaterialTheme.typography.titleMedium)
-        Text(nearest ?: stringResource(R.string.no_service))
-        payoffText?.let { Text(it) }
-        Text(stringResource(R.string.recent), style = MaterialTheme.typography.titleMedium)
-        if (recent.isEmpty()) {
-            Text(stringResource(R.string.quality_insufficient))
-        } else {
-            recent.forEach { Text(it) }
+        SectionCard(stringResource(R.string.nearest_service)) {
+            Text(nearest ?: stringResource(R.string.no_service), style = MaterialTheme.typography.bodyLarge)
+        }
+        payoffText?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
+        SectionCard(stringResource(R.string.recent)) {
+            if (recent.isEmpty()) {
+                Text(stringResource(R.string.quality_insufficient))
+            } else {
+                recent.forEach { Text(it, style = MaterialTheme.typography.bodyLarge) }
+            }
         }
     }
     selected?.let { index ->
@@ -97,7 +105,7 @@ fun DashboardScreen(
             },
             title = { Text(metric.title) },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(metric.quality)
                     Text(metric.detail)
                     Text(stringResource(R.string.events))
@@ -110,16 +118,18 @@ fun DashboardScreen(
 
 @Composable
 private fun MetricBlock(metric: MetricUi, onClick: () -> Unit) {
-    Column(
-        Modifier
+    Card(
+        modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .clickable(onClick = onClick)
-            .semantics(mergeDescendants = true) {}
-            .padding(vertical = 4.dp),
+            .semantics(mergeDescendants = true) {},
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
-        Text(metric.title, style = MaterialTheme.typography.titleMedium)
-        Text(metric.value ?: stringResource(R.string.quality_insufficient))
-        Text(metric.quality)
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(metric.title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(metric.value ?: stringResource(R.string.quality_insufficient), style = MaterialTheme.typography.headlineSmall)
+            Text(metric.quality, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }

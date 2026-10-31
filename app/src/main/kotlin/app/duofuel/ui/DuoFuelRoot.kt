@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
@@ -126,6 +124,7 @@ fun DuoFuelRoot(viewModel: DuoFuelViewModel = hiltViewModel(LocalContext.current
     }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             NavigationBar {
@@ -226,16 +225,15 @@ private val destinations = listOf(
 
 @Composable
 private fun MoreRoute(onOpen: (String) -> Unit) {
-    Column(Modifier.padding(16.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+    ScreenPage {
+        Text(stringResource(R.string.nav_more), style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
         listOf(
             "analytics" to R.string.analytics,
             "roi" to R.string.roi_title,
             "vehicle" to R.string.profile,
             "settings" to R.string.settings,
         ).forEach { (route, label) ->
-            Button(onClick = { onOpen(route) }, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(stringResource(label))
-            }
+            WideButton(stringResource(label), onClick = { onOpen(route) })
         }
     }
 }
@@ -328,61 +326,70 @@ private fun RefuelRoute(viewModel: DuoFuelViewModel, entryId: String?) {
             extras = extras.filter { it != copied }
         }
     }
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+    ScreenPage {
         Text(stringResource(R.string.nav_refuel), style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
-        FuelType.entries.forEach { type ->
-            FilterChip(
-                selected = fuel == type,
-                onClick = {
-                    fuel = type
-                    if (!totalLocked) price = viewModel.suggestedPrice(type)
-                },
-                label = { Text(fuelLabel(context, type)) },
-                modifier = Modifier.heightIn(min = 48.dp),
-            )
-        }
-        OutlinedTextField(quantity, { quantity = it; if (!totalLocked) total = productOrNull(it, price, currency)?.let { minor -> formatMinor(minor, currency, java.util.Locale.getDefault()).substringBefore(' ') } ?: total }, label = { Text(stringResource(R.string.field_quantity)) }, suffix = { Text(unit) }, modifier = Modifier.fillMaxWidthField())
-        OutlinedTextField(price, { price = it; if (!totalLocked) total = productOrNull(quantity, it, currency)?.let { minor -> formatMinor(minor, currency, java.util.Locale.getDefault()).substringBefore(' ') } ?: total }, label = { Text(stringResource(R.string.field_price)) }, suffix = { Text(currency) }, modifier = Modifier.fillMaxWidthField())
-        OutlinedTextField(total, { total = it; totalLocked = true }, label = { Text(stringResource(R.string.field_total)) }, suffix = { Text(currency) }, modifier = Modifier.fillMaxWidthField())
-        productOrNull(quantity, price, currency)?.let {
-            Text(stringResource(R.string.product_hint, formatMinor(it, currency, java.util.Locale.getDefault())))
-        }
-        if (editing == null) {
-            FilterChip(selected = !trip, onClick = { trip = false }, label = { Text(stringResource(R.string.field_odometer)) })
-            FilterChip(selected = trip, onClick = { trip = true }, label = { Text(stringResource(R.string.field_trip)) })
-        }
-        OutlinedTextField(odometer, { odometer = it }, label = { Text(if (trip) stringResource(R.string.field_trip) else stringResource(R.string.field_odometer)) }, suffix = { Text("км") }, modifier = Modifier.fillMaxWidthField())
-        DateField(occurred, { occurred = it })
-        TimeField(occurredTime, { occurredTime = it })
-        // OPEN-FULL-UX: полная и частичная всегда видны. Полная не подставляется невидимо.
-        FilterChip(selected = full, onClick = { full = true }, label = { Text(stringResource(R.string.full)) }, modifier = Modifier.heightIn(min = 48.dp))
-        FilterChip(selected = !full, onClick = { full = false }, label = { Text(stringResource(R.string.partial)) }, modifier = Modifier.heightIn(min = 48.dp))
-        OutlinedTextField(station, { station = it }, label = { Text(stringResource(R.string.field_station)) }, modifier = Modifier.fillMaxWidthField())
-        OutlinedTextField(notes, { notes = it }, label = { Text(stringResource(R.string.field_notes)) }, modifier = Modifier.fillMaxWidthField())
-        Button(onClick = {
-            pickExtra = false
-            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        }, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(stringResource(R.string.receipt))
-        }
-        Button(onClick = {
-            pickExtra = true
-            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        }, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(stringResource(R.string.add_photo))
-        }
-        extras.forEachIndexed { index, _ ->
-            TextButton(onClick = { extras = extras.filterIndexed { i, _ -> i != index } }, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(stringResource(R.string.remove_photo) + " " + (index + 1))
+        ChipFlow {
+            FuelType.entries.forEach { type ->
+                FilterChip(
+                    selected = fuel == type,
+                    onClick = {
+                        fuel = type
+                        if (!totalLocked) price = viewModel.suggestedPrice(type)
+                    },
+                    label = { Text(fuelLabel(context, type)) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                )
             }
         }
-        errors.forEach { Text(it) }
-        Button(
-            onClick = {
+        SectionCard(stringResource(R.string.section_amount)) {
+            OutlinedTextField(quantity, { quantity = it; if (!totalLocked) total = productOrNull(it, price, currency)?.let { minor -> formatMinor(minor, currency, java.util.Locale.getDefault()).substringBefore(' ') } ?: total }, label = { Text(stringResource(R.string.field_quantity)) }, suffix = { Text(unit) }, modifier = Modifier.fillMaxWidthField())
+            OutlinedTextField(price, { price = it; if (!totalLocked) total = productOrNull(quantity, it, currency)?.let { minor -> formatMinor(minor, currency, java.util.Locale.getDefault()).substringBefore(' ') } ?: total }, label = { Text(stringResource(R.string.field_price)) }, suffix = { Text(currency) }, modifier = Modifier.fillMaxWidthField())
+            OutlinedTextField(total, { total = it; totalLocked = true }, label = { Text(stringResource(R.string.field_total)) }, suffix = { Text(currency) }, modifier = Modifier.fillMaxWidthField())
+            productOrNull(quantity, price, currency)?.let {
+                Text(stringResource(R.string.product_hint, formatMinor(it, currency, java.util.Locale.getDefault())))
+            }
+        }
+        SectionCard(stringResource(R.string.section_when)) {
+            if (editing == null) {
+                ChipFlow {
+                    FilterChip(selected = !trip, onClick = { trip = false }, label = { Text(stringResource(R.string.field_odometer)) }, modifier = Modifier.heightIn(min = 48.dp))
+                    FilterChip(selected = trip, onClick = { trip = true }, label = { Text(stringResource(R.string.field_trip)) }, modifier = Modifier.heightIn(min = 48.dp))
+                }
+            }
+            OutlinedTextField(odometer, { odometer = it }, label = { Text(if (trip) stringResource(R.string.field_trip) else stringResource(R.string.field_odometer)) }, suffix = { Text("км") }, modifier = Modifier.fillMaxWidthField())
+            DateField(occurred, { occurred = it })
+            TimeField(occurredTime, { occurredTime = it })
+        }
+        SectionCard(stringResource(R.string.section_tank)) {
+            // OPEN-FULL-UX: полная и частичная всегда видны. Полная не подставляется невидимо.
+            ChipFlow {
+                FilterChip(selected = full, onClick = { full = true }, label = { Text(stringResource(R.string.full)) }, modifier = Modifier.heightIn(min = 48.dp))
+                FilterChip(selected = !full, onClick = { full = false }, label = { Text(stringResource(R.string.partial)) }, modifier = Modifier.heightIn(min = 48.dp))
+            }
+        }
+        SectionCard(stringResource(R.string.section_extra)) {
+            OutlinedTextField(station, { station = it }, label = { Text(stringResource(R.string.field_station)) }, supportingText = { Text(stringResource(R.string.field_optional)) }, modifier = Modifier.fillMaxWidthField())
+            OutlinedTextField(notes, { notes = it }, label = { Text(stringResource(R.string.field_notes)) }, supportingText = { Text(stringResource(R.string.field_optional)) }, modifier = Modifier.fillMaxWidthField())
+            WideOutlinedButton(stringResource(R.string.receipt), onClick = {
+                pickExtra = false
+                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            })
+            WideOutlinedButton(stringResource(R.string.add_photo), onClick = {
+                pickExtra = true
+                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            })
+            extras.forEachIndexed { index, _ ->
+                TextButton(onClick = { extras = extras.filterIndexed { i, _ -> i != index } }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.remove_photo) + " " + (index + 1))
+                }
+            }
+        }
+        errors.forEach { ErrorText(it) }
+        WideButton(stringResource(R.string.save), onClick = {
                 val vehicleId = snapshot?.vehicle?.id
                 if (vehicleId == null) {
                     errors = listOf(context.getString(R.string.issue_line, context.getString(R.string.profile), context.getString(R.string.issue_required)))
-                    return@Button
+                    return@WideButton
                 }
                 val qty = parseQuantity(quantity)
                 val km = parseKm(odometer)
@@ -395,18 +402,18 @@ private fun RefuelRoute(viewModel: DuoFuelViewModel, entryId: String?) {
                 }
                 if (localErrors.isNotEmpty() || qty !is Parse.Ok || km !is Parse.Ok || money !is Parse.Ok) {
                     errors = localErrors
-                    return@Button
+                    return@WideButton
                 }
                 val whenMs = enteredMoment(occurred, occurredTime, zone, editing?.occurredAtMs, System.currentTimeMillis())
                 if (whenMs == null) {
                     errors = listOf(momentIssue(context, occurred, occurredTime, zone))
-                    return@Button
+                    return@WideButton
                 }
                 val absolute = if (trip && editing == null) {
                     val base = snapshot.odometer.maxByOrNull { it.sortKey() }?.odometerKm
                     if (base == null) {
                         errors = listOf(issueText(context, app.duofuel.domain.validation.ValidationIssue(app.duofuel.domain.validation.FieldCode.TRIP, app.duofuel.domain.validation.IssueCode.TRIP_NEEDS_BASE, true)))
-                        return@Button
+                        return@WideButton
                     }
                     base + km.value
                 } else {
@@ -434,17 +441,15 @@ private fun RefuelRoute(viewModel: DuoFuelViewModel, entryId: String?) {
                 if (!confirmDecrease && viewModel.needsDecreaseConfirm(draft)) {
                     confirmDecrease = true
                     errors = listOf(context.getString(R.string.issue_decrease))
-                    return@Button
+                    return@WideButton
                 }
                 if (!confirmChronology && viewModel.needsChronologyConfirm(draft)) {
                     confirmChronology = true
                     errors = listOf(context.getString(R.string.issue_chronology))
-                    return@Button
+                    return@WideButton
                 }
                 errors = viewModel.saveFuel(draft, confirmDecrease, confirmChronology)
-            },
-            modifier = Modifier.heightIn(min = 48.dp),
-        ) { Text(stringResource(R.string.save)) }
+        })
     }
 }
 
@@ -486,12 +491,16 @@ private fun HistoryRoute(viewModel: DuoFuelViewModel, onEditFuel: (String) -> Un
         val copied = copyReceipt(context, uri) ?: return@rememberLauncherForActivityResult
         if (copied !in servicePhotos) servicePhotos = servicePhotos + copied
     }
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+    ScreenPage {
+        Text(stringResource(R.string.nav_history), style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
         RowChips(filter) { filter = it }
         when (filter) {
-            "service" -> snapshot?.serviceRecords?.forEach { record ->
-                Text(record.serviceType + " · " + Dates.formatDay(record.occurredAtMs, zone) + " · " + record.costMinor + " " + record.currency + if (record.isGbo) " · ГБО" else "")
-                androidx.compose.foundation.layout.Row {
+            "service" -> if (snapshot?.serviceRecords.isNullOrEmpty()) {
+                Text(stringResource(R.string.history_empty))
+            } else snapshot?.serviceRecords?.forEach { record ->
+                SectionCard {
+                    Text(serviceLabel(context, record.serviceType) + " · " + Dates.formatDay(record.occurredAtMs, zone) + " " + Dates.formatTime(record.occurredAtMs, zone) + " · " + formatMinor(record.costMinor, record.currency, java.util.Locale.getDefault()) + if (record.isGbo) " · ГБО" else "")
+                    androidx.compose.foundation.layout.Row {
                     TextButton(onClick = {
                         editingService = record
                         serviceCost = formatMinor(record.costMinor, record.currency, java.util.Locale.getDefault()).substringBefore(' ')
@@ -503,11 +512,15 @@ private fun HistoryRoute(viewModel: DuoFuelViewModel, onEditFuel: (String) -> Un
                         servicePhotos = record.attachmentUris
                     }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.edit)) }
                     TextButton(onClick = { viewModel.deleteService(record.id) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.delete)) }
+                    }
                 }
             }
-            "expense" -> snapshot?.expenses?.forEach { expense ->
-                Text(expense.category + " · " + Dates.formatDay(expense.occurredAtMs, zone) + " · " + expense.amountMinor + " " + expense.currency)
-                androidx.compose.foundation.layout.Row {
+            "expense" -> if (snapshot?.expenses.isNullOrEmpty()) {
+                Text(stringResource(R.string.history_empty))
+            } else snapshot?.expenses?.forEach { expense ->
+                SectionCard {
+                    Text(expense.category + " · " + Dates.formatDay(expense.occurredAtMs, zone) + " " + Dates.formatTime(expense.occurredAtMs, zone) + " · " + formatMinor(expense.amountMinor, expense.currency, java.util.Locale.getDefault()))
+                    androidx.compose.foundation.layout.Row {
                     TextButton(onClick = {
                         editingExpense = expense
                         expenseAmount = formatMinor(expense.amountMinor, expense.currency, java.util.Locale.getDefault()).substringBefore(' ')
@@ -516,14 +529,18 @@ private fun HistoryRoute(viewModel: DuoFuelViewModel, onEditFuel: (String) -> Un
                         expenseNotes = expense.notes.orEmpty()
                     }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.edit)) }
                     TextButton(onClick = { viewModel.deleteExpense(expense.id) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.delete)) }
+                    }
                 }
             }
             else -> {
+                if (snapshot?.entries.isNullOrEmpty()) Text(stringResource(R.string.history_empty))
                 snapshot?.entries?.forEach { entry ->
-                    Text(fuelLabel(LocalContext.current, entry.fuelType) + " · " + Dates.formatDay(entry.occurredAtMs, zone) + " · " + entry.quantity + " " + entry.unit + " · " + entry.totalCostMinor + " " + entry.currency + if (entry.isFull) " · " + stringResource(R.string.full) else "")
+                    SectionCard {
+                    Text(fuelLabel(LocalContext.current, entry.fuelType) + " · " + Dates.formatDay(entry.occurredAtMs, zone) + " " + Dates.formatTime(entry.occurredAtMs, zone) + " · " + plainQuantity(entry.quantity) + " " + entry.unit + " · " + formatMinor(entry.totalCostMinor, entry.currency, java.util.Locale.getDefault()) + if (entry.isFull) " · " + stringResource(R.string.full) else "")
                     androidx.compose.foundation.layout.Row {
                         TextButton(onClick = { onEditFuel(entry.id) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.edit)) }
                         TextButton(onClick = { viewModel.deleteFuel(entry.id) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.delete)) }
+                    }
                     }
                 }
                 Text(stringResource(R.string.odometer_only), style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
@@ -531,23 +548,23 @@ private fun HistoryRoute(viewModel: DuoFuelViewModel, onEditFuel: (String) -> Un
                 DateField(odometerDate, { odometerDate = it })
                 TimeField(odometerTime, { odometerTime = it })
                 RowSwitch(stringResource(R.string.panel_reset), panelReset) { panelReset = it }
-                odometerError?.let { Text(it) }
-                Button(onClick = {
-                    val vehicleId = snapshot?.vehicle?.id ?: return@Button
+                odometerError?.let { ErrorText(it) }
+                WideButton(stringResource(R.string.save), onClick = {
+                    val vehicleId = snapshot?.vehicle?.id ?: return@WideButton
                     val km = parseKm(odometerText)
                     if (km !is Parse.Ok) {
                         odometerError = issueText(context, (km as Parse.Err).issue)
-                        return@Button
+                        return@WideButton
                     }
                     val whenMs = enteredMoment(odometerDate, odometerTime, zone, null, System.currentTimeMillis())
                     if (whenMs == null) {
                         odometerError = momentIssue(context, odometerDate, odometerTime, zone)
-                        return@Button
+                        return@WideButton
                     }
                     val issues = viewModel.saveOdometerReading(vehicleId, whenMs, km.value, trip = false, panelReset = panelReset)
                     odometerError = issues.firstOrNull()
                     if (issues.isEmpty()) odometerText = ""
-                }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save)) }
+                })
             }
         }
         editingService?.let { record ->
@@ -616,12 +633,49 @@ private fun HistoryRoute(viewModel: DuoFuelViewModel, onEditFuel: (String) -> Un
     }
 }
 
+private val serviceKinds = listOf(
+    "liquid-filter" to R.string.svc_liquid,
+    "vapor-filter" to R.string.svc_vapor,
+    "injectors" to R.string.svc_injectors,
+    "reducer" to R.string.svc_reducer,
+    "tank" to R.string.svc_tank,
+    "valves" to R.string.svc_valves,
+)
+
+@Composable
+private fun ServiceKindChips(selected: String, onSelect: (String) -> Unit) {
+    ChipFlow {
+        serviceKinds.forEach { (code, label) ->
+            FilterChip(
+                selected = selected == code,
+                onClick = { onSelect(code) },
+                label = { Text(stringResource(label)) },
+                modifier = Modifier.heightIn(min = 48.dp),
+            )
+        }
+    }
+}
+
+private fun serviceLabel(context: android.content.Context, code: String): String {
+    val label = serviceKinds.firstOrNull { it.first == code }?.second
+    return if (label == null) code else context.getString(label)
+}
+
+private fun applyServiceKind(code: String, setKnown: (String) -> Unit, setCustom: (String) -> Unit) {
+    if (serviceKinds.any { it.first == code }) {
+        setKnown(code)
+        setCustom("")
+    } else {
+        setCustom(code)
+    }
+}
+
 @Composable
 private fun RowChips(selected: String, onSelect: (String) -> Unit) {
-    androidx.compose.foundation.layout.Row {
-        FilterChip(selected == "fuel", { onSelect("fuel") }, label = { Text(stringResource(R.string.history_fuel)) })
-        FilterChip(selected == "service", { onSelect("service") }, label = { Text(stringResource(R.string.history_service)) })
-        FilterChip(selected == "expense", { onSelect("expense") }, label = { Text(stringResource(R.string.history_expense)) })
+    ChipFlow {
+        FilterChip(selected == "fuel", { onSelect("fuel") }, label = { Text(stringResource(R.string.history_fuel)) }, modifier = Modifier.heightIn(min = 48.dp))
+        FilterChip(selected == "service", { onSelect("service") }, label = { Text(stringResource(R.string.history_service)) }, modifier = Modifier.heightIn(min = 48.dp))
+        FilterChip(selected == "expense", { onSelect("expense") }, label = { Text(stringResource(R.string.history_expense)) }, modifier = Modifier.heightIn(min = 48.dp))
     }
 }
 
@@ -658,24 +712,29 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
     var includeOperating by remember { mutableStateOf(false) }
     var includeGbo by remember { mutableStateOf(false) }
     var editingScheduleId by remember { mutableStateOf<String?>(null) }
+    var customType by remember { mutableStateOf("") }
+    var customWork by remember { mutableStateOf("") }
     var formError by remember { mutableStateOf<String?>(null) }
     val currency = deviceCurrency()
     val workPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         val copied = copyReceipt(context, uri) ?: return@rememberLauncherForActivityResult
         if (copied !in workPhotos) workPhotos = workPhotos + copied
     }
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+    ScreenPage {
+        Text(stringResource(R.string.nav_service), style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
         // OPEN-FILTER-DEFAULT: диапазоны из подсказок остаются текстом, в интервал не подставляются.
-        Text(stringResource(R.string.hint_liquid))
-        Text(stringResource(R.string.hint_vapor))
-        Text(stringResource(R.string.hint_injectors))
-        Text(stringResource(R.string.hint_reducer))
-        Text(stringResource(R.string.hint_tank))
-        Text(stringResource(R.string.hint_valves))
-        Text(stringResource(R.string.reference_ignored))
+        SectionCard(stringResource(R.string.hints_title)) {
+            Text(stringResource(R.string.hint_liquid))
+            Text(stringResource(R.string.hint_vapor))
+            Text(stringResource(R.string.hint_injectors))
+            Text(stringResource(R.string.hint_reducer))
+            Text(stringResource(R.string.hint_tank))
+            Text(stringResource(R.string.hint_valves))
+            Text(stringResource(R.string.reference_ignored))
+        }
         state.app.active?.schedules?.forEach { schedule ->
             TextButton(onClick = {
-                type = schedule.serviceType
+                applyServiceKind(schedule.serviceType, { type = it }, { customType = it })
                 intervalKm = schedule.intervalKm?.toString().orEmpty()
                 intervalDays = schedule.intervalDays?.toString().orEmpty()
                 leadKm = schedule.leadKm?.toString().orEmpty()
@@ -685,15 +744,21 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
                 snooze = schedule.snoozeUntilEpochDay?.let(Dates::formatEpochDay).orEmpty()
                 editingScheduleId = schedule.id
             }, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(stringResource(R.string.edit) + " · " + schedule.serviceType)
+                Text(stringResource(R.string.edit) + " · " + serviceLabel(context, schedule.serviceType))
             }
         }
         state.report?.serviceStatuses?.forEach { status ->
-            Text(status.serviceType + " · " + statusLabel(LocalContext.current, status.status))
+            Text(serviceLabel(LocalContext.current, status.serviceType) + " · " + statusLabel(LocalContext.current, status.status))
             Text(stringResource(R.string.forecast) + " 30: " + (status.forecast30.averageKmPerDay?.toPlainString() ?: stringResource(R.string.quality_insufficient)))
             Text(stringResource(R.string.forecast) + " 90: " + (status.forecast90.averageKmPerDay?.toPlainString() ?: stringResource(R.string.quality_insufficient)))
         }
-        OutlinedTextField(type, { type = it }, label = { Text(stringResource(R.string.service_schedule)) }, modifier = Modifier.fillMaxWidthField())
+        ServiceKindChips(type) { chosen ->
+            val previous = type
+            type = chosen
+            customType = ""
+            if (workType == previous) workType = chosen
+        }
+        OutlinedTextField(customType, { customType = it }, label = { Text(stringResource(R.string.svc_custom)) }, supportingText = { Text(stringResource(R.string.field_optional)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(intervalKm, { intervalKm = it }, label = { Text(stringResource(R.string.interval_km)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(intervalDays, { intervalDays = it }, label = { Text(stringResource(R.string.interval_days)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(leadKm, { leadKm = it }, label = { Text(stringResource(R.string.lead_km)) }, modifier = Modifier.fillMaxWidthField())
@@ -702,7 +767,7 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
         DateField(dueDate, { dueDate = it }, R.string.field_due_date)
         // OPEN-SOON: дату отсрочки выбирает пользователь. Порог «скоро» сам не включается.
         DateField(snooze, { snooze = it }, R.string.snooze)
-        formError?.let { Text(it) }
+        formError?.let { ErrorText(it) }
         Button(onClick = {
             val numbers = listOf(
                 optionalWhole(intervalKm, FieldCode.SCHEDULE),
@@ -732,7 +797,7 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
                 ServiceScheduleCalc(
                     id = kept?.id ?: UUID.randomUUID().toString(),
                     vehicleId = vehicleId,
-                    serviceType = type,
+                    serviceType = customType.trim().ifBlank { type },
                     intervalKm = (numbers[0] as? Parse.Ok)?.value,
                     intervalDays = (numbers[1] as? Parse.Ok)?.value,
                     dueOdometerKm = (numbers[4] as? Parse.Ok)?.value,
@@ -745,7 +810,12 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
             )
             formError = null
         }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(if (editingScheduleId != null) R.string.save else R.string.add)) }
-        OutlinedTextField(workType, { workType = it }, label = { Text(stringResource(R.string.service_work)) }, modifier = Modifier.fillMaxWidthField())
+        Text(stringResource(R.string.service_work), style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+        ServiceKindChips(workType) { chosen ->
+            workType = chosen
+            customWork = ""
+        }
+        OutlinedTextField(customWork, { customWork = it }, label = { Text(stringResource(R.string.svc_custom)) }, supportingText = { Text(stringResource(R.string.field_optional)) }, modifier = Modifier.fillMaxWidthField())
         DateField(workDate, { workDate = it })
         TimeField(workTime, { workTime = it })
         OutlinedTextField(workOdo, { workOdo = it }, label = { Text(stringResource(R.string.field_odometer)) }, suffix = { Text("км") }, modifier = Modifier.fillMaxWidthField())
@@ -776,7 +846,7 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
                 ServiceRecordCalc(
                     id = UUID.randomUUID().toString(),
                     vehicleId = vehicleId,
-                    serviceType = workType,
+                    serviceType = customWork.trim().ifBlank { workType },
                     occurredAtMs = whenMs,
                     odometerKm = km.value,
                     costMinor = money.value,
@@ -832,7 +902,10 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
 
 @Composable
 private fun RowSwitch(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
-    androidx.compose.foundation.layout.Row {
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
         Text(label, modifier = Modifier.weight(1f))
         Switch(checked = value, onCheckedChange = onChange)
     }
@@ -912,23 +985,28 @@ private fun VehicleRoute(viewModel: DuoFuelViewModel) {
         }
         profileLoaded = true
     }
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+    ScreenPage {
+        Text(stringResource(R.string.profile), style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
         // OPEN-BILLING-WHEN: в интерфейсе один активный профиль. Второе авто — вместе с Pro.
         Text(stringResource(R.string.one_vehicle))
+        Text(stringResource(R.string.section_car), style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
         OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.field_name)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(make, { make = it }, label = { Text(stringResource(R.string.field_make)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(model, { model = it }, label = { Text(stringResource(R.string.field_model)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(year, { year = it }, label = { Text(stringResource(R.string.field_year)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(engine, { engine = it }, label = { Text(stringResource(R.string.field_engine)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(injection, { injection = it }, label = { Text(stringResource(R.string.field_injection)) }, modifier = Modifier.fillMaxWidthField())
+        Text(stringResource(R.string.section_gbo), style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+        ChipFlow {
         FilterChip(gas == FuelType.LPG, {
             if (gas != FuelType.LPG && (gasUnit == "m3" || gasUnit == "kg")) gasUnit = "L"
             gas = FuelType.LPG
-        }, label = { Text(stringResource(R.string.fuel_lpg)) })
+        }, label = { Text(stringResource(R.string.fuel_lpg)) }, modifier = Modifier.heightIn(min = 48.dp))
         FilterChip(gas == FuelType.CNG, {
             if (gas != FuelType.CNG && gasUnit == "L") gasUnit = "m3"
             gas = FuelType.CNG
-        }, label = { Text(stringResource(R.string.fuel_cng)) })
+        }, label = { Text(stringResource(R.string.fuel_cng)) }, modifier = Modifier.heightIn(min = 48.dp))
+        }
         OutlinedTextField(generation, { generation = it }, label = { Text(stringResource(R.string.field_generation)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(manufacturer, { manufacturer = it }, label = { Text(stringResource(R.string.field_manufacturer)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(equipment, { equipment = it }, label = { Text(stringResource(R.string.field_equipment)) }, modifier = Modifier.fillMaxWidthField())
@@ -957,8 +1035,8 @@ private fun VehicleRoute(viewModel: DuoFuelViewModel) {
         OutlinedTextField(gasCapacity, { gasCapacity = it }, label = { Text(stringResource(R.string.field_capacity)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(gasCurrency, { gasCurrency = it.uppercase() }, label = { Text(stringResource(R.string.field_currency)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(gasPrice, { gasPrice = it }, label = { Text(stringResource(R.string.field_default_price)) }, suffix = { Text(gasCurrency) }, modifier = Modifier.fillMaxWidthField())
-        errors.forEach { Text(it) }
-        Button(onClick = {
+        errors.forEach { ErrorText(it) }
+        WideButton(stringResource(R.string.save), onClick = {
             val id = existing?.id ?: UUID.randomUUID().toString()
             val cost = installCost.takeIf { it.isNotBlank() }?.let { parseMoney(it, currency) }
             val installed = if (installDate.isBlank()) null else parseDate(installDate, zone)
@@ -977,7 +1055,7 @@ private fun VehicleRoute(viewModel: DuoFuelViewModel) {
             }
             if (fieldError != null) {
                 errors = listOf(fieldError)
-                return@Button
+                return@WideButton
             }
             val profile = VehicleProfile(
                 id = id,
@@ -1006,10 +1084,10 @@ private fun VehicleRoute(viewModel: DuoFuelViewModel) {
                 keptFuel(storedFuels, gas, gasUnit, (gasCap as? Parse.Ok)?.value, gasCurrency, (gasDefault as? Parse.Ok)?.value),
             ).distinctBy { it.fuelType }
             errors = viewModel.saveVehicle(profile, fuels, state.app.active?.settings ?: app.duofuel.domain.model.CalculationSettingsCalc(null, null, currency, true, false))
-        }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save)) }
+        })
         if (existing != null) {
-            Button(onClick = { viewModel.archiveActive() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.archive)) }
-            Button(onClick = { confirmDelete = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.delete)) }
+            WideOutlinedButton(stringResource(R.string.archive), onClick = { viewModel.archiveActive() })
+            WideOutlinedButton(stringResource(R.string.delete), onClick = { confirmDelete = true })
         }
         state.app.archived.forEach { archived ->
             TextButton(onClick = { viewModel.restore(archived.id) }) { Text(stringResource(R.string.restore) + " " + archived.name) }
@@ -1074,21 +1152,23 @@ private fun RoiRoute(viewModel: DuoFuelViewModel) {
     var baseline by remember { mutableStateOf(state.app.active?.settings?.baselinePetrolL100?.toString().orEmpty()) }
     var price by remember { mutableStateOf("") }
     val currency = state.app.active?.vehicle?.installCostCurrency ?: deviceCurrency()
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+    ScreenPage {
         Text(stringResource(R.string.roi_title), style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
-        Text(stringResource(R.string.roi_no_date))
-        if (roi?.doesNotPayOff == true) Text(stringResource(R.string.no_payoff))
-        if (roi?.window == RoiWindow.ENTIRE_HISTORY) Text(stringResource(R.string.roi_entire_history))
-        roi?.remainingKm?.remainingKm?.let { Text(stringResource(R.string.roi_remaining, it.toPlainString())) }
-        if (roi?.unreimbursedMinor == 0L) Text(stringResource(R.string.roi_covered))
-        roi?.investmentMinor?.let { Text(formatMinor(it, roi.investmentCurrency ?: currency, java.util.Locale.getDefault())) }
-        Text(stringResource(R.string.scenario_price) + ": " + (roi?.saving?.priceIsScenario == true))
-        val factual = roi?.saving?.factualAveragePetrolPrice
-        Text(stringResource(R.string.factual_price) + ": " + (factual?.moneyMinor?.let { formatMinor(it, factual.currency ?: currency, java.util.Locale.getDefault()) } ?: stringResource(R.string.quality_insufficient)))
+        SectionCard {
+            Text(stringResource(R.string.roi_no_date))
+            if (roi?.doesNotPayOff == true) Text(stringResource(R.string.no_payoff))
+            if (roi?.window == RoiWindow.ENTIRE_HISTORY) Text(stringResource(R.string.roi_entire_history))
+            roi?.remainingKm?.remainingKm?.let { Text(stringResource(R.string.roi_remaining, it.toPlainString())) }
+            if (roi?.unreimbursedMinor == 0L) Text(stringResource(R.string.roi_covered))
+            roi?.investmentMinor?.let { Text(formatMinor(it, roi.investmentCurrency ?: currency, java.util.Locale.getDefault())) }
+            if (roi?.saving?.priceIsScenario == true) Text(stringResource(R.string.scenario_price))
+            val factual = roi?.saving?.factualAveragePetrolPrice
+            Text(stringResource(R.string.factual_price) + ": " + (factual?.moneyMinor?.let { formatMinor(it, factual.currency ?: currency, java.util.Locale.getDefault()) } ?: stringResource(R.string.quality_insufficient)))
+        }
         OutlinedTextField(baseline, { baseline = it }, label = { Text(stringResource(R.string.baseline)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(price, { price = it }, label = { Text(stringResource(R.string.scenario_price)) }, suffix = { Text(currency) }, modifier = Modifier.fillMaxWidthField())
-        Button(onClick = {
-            val active = state.app.active ?: return@Button
+        WideButton(stringResource(R.string.save), onClick = {
+            val active = state.app.active ?: return@WideButton
             val priceMinor = (parseMoney(price, currency) as? Parse.Ok)?.value
             viewModel.saveVehicle(
                 active.vehicle,
@@ -1101,7 +1181,7 @@ private fun RoiRoute(viewModel: DuoFuelViewModel) {
                     baselineFromFactualHistory = false,
                 ),
             )
-        }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save)) }
+        })
     }
 }
 
@@ -1124,7 +1204,9 @@ private fun SettingsRoute(viewModel: DuoFuelViewModel) {
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) viewModel.setReminders(true)
     }
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+    ScreenPage {
+        Text(stringResource(R.string.settings), style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
+        SectionCard {
         RowSwitch(stringResource(R.string.settings_full_default), state.app.prefillFull) { viewModel.setPrefillFull(it) }
         Text(stringResource(R.string.reminders_hint))
         RowSwitch(stringResource(R.string.settings_reminders), state.app.remindersEnabled) { enabled ->
@@ -1134,15 +1216,10 @@ private fun SettingsRoute(viewModel: DuoFuelViewModel) {
                 viewModel.setReminders(enabled)
             }
         }
-        Button(onClick = { scope.launch { shareBytes(context, "duofuel-csv.zip", viewModel.exportCsv()) } }, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(stringResource(R.string.csv))
         }
-        Button(onClick = { scope.launch { shareBytes(context, "duofuel-archive.zip", viewModel.exportArchive()) } }, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(stringResource(R.string.local_archive))
-        }
-        Button(onClick = { picker.launch(arrayOf("application/zip")) }, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(stringResource(R.string.import_archive))
-        }
+        WideButton(stringResource(R.string.csv), onClick = { scope.launch { shareBytes(context, "duofuel-csv.zip", viewModel.exportCsv()) } })
+        WideButton(stringResource(R.string.local_archive), onClick = { scope.launch { shareBytes(context, "duofuel-archive.zip", viewModel.exportArchive()) } })
+        WideOutlinedButton(stringResource(R.string.import_archive), onClick = { picker.launch(arrayOf("application/zip")) })
         if (conflicts > 0) Text(stringResource(R.string.conflict_count, conflicts))
     }
     if (pending != null) {
