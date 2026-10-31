@@ -62,6 +62,8 @@
     <string name="field_equipment">Модель оборудования</string>
     <string name="field_date">Дата</string>
     <string name="date_hint">ГГГГ-ММ-ДД</string>
+    <string name="field_time">Время</string>
+    <string name="time_hint">ЧЧ:ММ</string>
     <string name="field_install_date">Дата установки</string>
     <string name="field_install_cost">Стоимость установки</string>
     <string name="field_useful">Полезный объём, %</string>
@@ -97,8 +99,11 @@
     <string name="issue_duplicate">такое топливо уже есть</string>
     <string name="issue_schedule">выберите, какой регламент сдвигать</string>
     <string name="issue_date">дата в формате ГГГГ-ММ-ДД</string>
+    <string name="issue_time">время в формате ЧЧ:ММ</string>
     <string name="issue_line">%1$s: %2$s</string>
     <string name="receipt">Чек</string>
+    <string name="add_photo">Ещё снимок</string>
+    <string name="remove_photo">Убрать снимок</string>
     <string name="history_fuel">Заправки</string>
     <string name="history_service">Сервис</string>
     <string name="history_expense">Расходы</string>

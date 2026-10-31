@@ -27,6 +27,18 @@ class DatesTest {
     }
 
     @Test
+    fun clock_setsMinute_andSameMinuteKeepsSeconds() {
+        val stored = LocalDate.of(2026, 10, 30).atTime(8, 15, 42).atZone(zone).toInstant().toEpochMilli()
+        val now = LocalDate.of(2026, 10, 31).atTime(15, 5).atZone(zone).toInstant().toEpochMilli()
+        assertEquals(stored, Dates.resolveOccurredAt("2026-10-30", zone, stored, now, "08:15"))
+        val moved = LocalDate.of(2026, 10, 30).atTime(9, 5).atZone(zone).toInstant().toEpochMilli()
+        assertEquals(moved, Dates.resolveOccurredAt("2026-10-30", zone, stored, now, "9:05"))
+        assertNull(Dates.resolveOccurredAt("2026-10-30", zone, stored, now, "25:00"))
+        assertEquals(false, Dates.clockAccepted("25:00"))
+        assertEquals("08:15", Dates.formatTime(stored, zone))
+    }
+
+    @Test
     fun blankOrWrongShape_isRejected() {
         val now = 0L
         assertNull(Dates.resolveOccurredAt("", zone, null, now))

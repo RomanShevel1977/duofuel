@@ -296,6 +296,74 @@ class DuoFuelPersistenceTest {
         }
     }
 
+    @Test
+    fun photos_areStoredOnce_andServiceAttachmentsSurviveEdit() = runBlocking {
+        val name = "duofuel-photos.db"
+        context.deleteDatabase(name)
+        val db = open(name)
+        try {
+            val repo = DuoFuelRepositoryImpl(db.dao(), context)
+            val at = 1_700_000_000_000L
+            repo.saveVehicle(
+                profile("veh-photo", at),
+                listOf(FuelConfigProfile("fuel-lpg", FuelType.LPG, "L", null, "UAH", null)),
+                CalculationSettingsCalc(null, null, "UAH", true, false),
+            )
+            repo.saveFuel(
+                FuelEntryDraft(
+                    id = "fill-photo",
+                    vehicleId = "veh-photo",
+                    fuelType = FuelType.LPG,
+                    occurredAtMs = at,
+                    odometerKm = 100,
+                    inputMethod = InputMethod.ABSOLUTE,
+                    odometerKind = OdometerKind.READING,
+                    quantity = 10.0,
+                    unit = "L",
+                    unitPriceMinor = 100,
+                    totalCostMinor = 1_000,
+                    currency = "UAH",
+                    isFull = true,
+                    station = null,
+                    notes = null,
+                    receiptUri = "file://receipt",
+                    extraAttachmentUris = listOf("file://extra", "file://receipt", "file://extra"),
+                ),
+            )
+            repo.saveService(
+                ServiceRecordCalc(
+                    id = "svc-photo",
+                    vehicleId = "veh-photo",
+                    serviceType = "liquid-filter",
+                    occurredAtMs = at,
+                    odometerKm = 100,
+                    costMinor = 1_000,
+                    currency = "UAH",
+                    isGbo = true,
+                    scheduleId = null,
+                    createdAtMs = at,
+                    attachmentUris = listOf("file://job", "file://job"),
+                ),
+                provider = "Master",
+                notes = null,
+            )
+            val active = repo.observeApp().first().active!!
+            assertEquals("file://receipt", active.entries.single().receiptUri)
+            assertEquals(listOf("file://extra"), active.entries.single().extraAttachmentUris)
+            assertEquals(listOf("file://job"), active.serviceRecords.single().attachmentUris)
+            repo.saveService(
+                active.serviceRecords.single().copy(notes = "kept"),
+                provider = "Master",
+                notes = "kept",
+            )
+            val again = repo.observeApp().first().active!!.serviceRecords.single()
+            assertEquals("kept", again.notes)
+            assertEquals(listOf("file://job"), again.attachmentUris)
+        } finally {
+            db.close()
+        }
+    }
+
     private fun open(name: String): DuoFuelDatabase =
         Room.databaseBuilder(context, DuoFuelDatabase::class.java, name)
             .addCallback(DuoFuelDatabase.openCallback)
