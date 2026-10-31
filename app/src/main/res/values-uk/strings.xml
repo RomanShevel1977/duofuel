@@ -148,5 +148,7 @@
     <string name="cost">Вартість</string>
     <string name="add">Додати</string>
     <string name="edit">Змінити</string>
+    <string name="odometer_only">Лише пробіг</string>
+    <string name="panel_reset">Це заміна панелі</string>
     <string name="reference_ignored">Корисний обʼєм і температура перемикання зберігаються в профілі й не беруть участі в розрахунку.</string>
 </resources>

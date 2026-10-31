@@ -104,6 +104,7 @@ interface DuoFuelRepository {
     suspend fun restoreVehicle(id: String)
     suspend fun deleteVehicle(id: String)
     suspend fun saveFuel(draft: FuelEntryDraft): String
+    suspend fun saveOdometer(event: app.duofuel.domain.model.OdometerEventCalc)
     suspend fun deleteFuel(id: String)
     suspend fun undoLastFuelSave(): Boolean
     suspend fun saveService(record: ServiceRecordCalc, provider: String?, notes: String?)

@@ -51,7 +51,9 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
+import androidx.navigation.navArgument
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -109,6 +111,14 @@ fun DuoFuelRoot(viewModel: DuoFuelViewModel = hiltViewModel(LocalContext.current
     }
     LaunchedEffect(state.ready, state.app.active?.vehicle?.id) {
         if (state.ready && state.app.active == null && route != "vehicle") nav.navigate("vehicle")
+    }
+    LaunchedEffect(state.openRefuel) {
+        if (!state.openRefuel) return@LaunchedEffect
+        viewModel.consumeOpenRefuel()
+        nav.navigate("refuel") {
+            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+        }
     }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -170,8 +180,14 @@ fun DuoFuelRoot(viewModel: DuoFuelViewModel = hiltViewModel(LocalContext.current
                     },
                 )
             }
-            composable("refuel") { RefuelRoute(viewModel) }
-            composable("history") { HistoryRoute(viewModel) }
+            composable("refuel") { RefuelRoute(viewModel, entryId = null) }
+            composable(
+                "refuel/{entryId}",
+                arguments = listOf(navArgument("entryId") { type = NavType.StringType }),
+            ) { entry ->
+                RefuelRoute(viewModel, entry.arguments?.getString("entryId"))
+            }
+            composable("history") { HistoryRoute(viewModel, onEditFuel = { id -> nav.navigate("refuel/$id") }) }
             composable("service") { ServiceRoute(viewModel) }
             composable("more") {
                 MoreRoute(
@@ -245,9 +261,10 @@ private fun metricsOf(report: app.duofuel.domain.model.DashboardReport): List<Me
 }
 
 @Composable
-private fun RefuelRoute(viewModel: DuoFuelViewModel) {
+private fun RefuelRoute(viewModel: DuoFuelViewModel, entryId: String?) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snapshot = state.app.active
+    val editing = snapshot?.entries?.firstOrNull { it.id == entryId }
     val context = LocalContext.current
     var fuel by remember { mutableStateOf(viewModel.suggestedFuel()) }
     var quantity by remember { mutableStateOf("") }
@@ -261,7 +278,25 @@ private fun RefuelRoute(viewModel: DuoFuelViewModel) {
     var notes by remember { mutableStateOf("") }
     var errors by remember { mutableStateOf(emptyList<String>()) }
     var confirmDecrease by remember { mutableStateOf(false) }
+    var confirmChronology by remember { mutableStateOf(false) }
     var receipt by remember { mutableStateOf<String?>(null) }
+    var loaded by remember { mutableStateOf(false) }
+    LaunchedEffect(editing?.id) {
+        val entry = editing ?: return@LaunchedEffect
+        if (loaded) return@LaunchedEffect
+        fuel = entry.fuelType
+        quantity = java.math.BigDecimal.valueOf(entry.quantity).stripTrailingZeros().toPlainString()
+        price = entry.unitPriceMinor?.let { formatMinor(it, entry.currency, java.util.Locale.getDefault()).substringBefore(' ') }.orEmpty()
+        total = formatMinor(entry.totalCostMinor, entry.currency, java.util.Locale.getDefault()).substringBefore(' ')
+        totalLocked = true
+        odometer = entry.odometerKm.toString()
+        trip = false
+        full = entry.isFull
+        station = entry.station.orEmpty()
+        notes = entry.notes.orEmpty()
+        receipt = entry.receiptUri
+        loaded = true
+    }
     val currency = snapshot?.fuels?.firstOrNull { it.fuelType == fuel }?.currency ?: deviceCurrency()
     val unit = snapshot?.fuels?.firstOrNull { it.fuelType == fuel }?.unit ?: "L"
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -286,8 +321,10 @@ private fun RefuelRoute(viewModel: DuoFuelViewModel) {
         productOrNull(quantity, price, currency)?.let {
             Text(stringResource(R.string.product_hint, formatMinor(it, currency, java.util.Locale.getDefault())))
         }
-        FilterChip(selected = !trip, onClick = { trip = false }, label = { Text(stringResource(R.string.field_odometer)) })
-        FilterChip(selected = trip, onClick = { trip = true }, label = { Text(stringResource(R.string.field_trip)) })
+        if (editing == null) {
+            FilterChip(selected = !trip, onClick = { trip = false }, label = { Text(stringResource(R.string.field_odometer)) })
+            FilterChip(selected = trip, onClick = { trip = true }, label = { Text(stringResource(R.string.field_trip)) })
+        }
         OutlinedTextField(odometer, { odometer = it }, label = { Text(if (trip) stringResource(R.string.field_trip) else stringResource(R.string.field_odometer)) }, suffix = { Text("км") }, modifier = Modifier.fillMaxWidthField())
         // OPEN-FULL-UX: полная и частичная всегда видны. Полная не подставляется невидимо.
         FilterChip(selected = full, onClick = { full = true }, label = { Text(stringResource(R.string.full)) }, modifier = Modifier.heightIn(min = 48.dp))
@@ -318,7 +355,7 @@ private fun RefuelRoute(viewModel: DuoFuelViewModel) {
                     errors = localErrors
                     return@Button
                 }
-                val absolute = if (trip) {
+                val absolute = if (trip && editing == null) {
                     val base = snapshot.odometer.maxByOrNull { it.sortKey() }?.odometerKm
                     if (base == null) {
                         errors = listOf(issueText(context, app.duofuel.domain.validation.ValidationIssue(app.duofuel.domain.validation.FieldCode.TRIP, app.duofuel.domain.validation.IssueCode.TRIP_NEEDS_BASE, true)))
@@ -329,10 +366,10 @@ private fun RefuelRoute(viewModel: DuoFuelViewModel) {
                     km.value
                 }
                 val draft = FuelEntryDraft(
-                    id = null,
+                    id = editing?.id,
                     vehicleId = vehicleId,
                     fuelType = fuel,
-                    occurredAtMs = System.currentTimeMillis(),
+                    occurredAtMs = editing?.occurredAtMs ?: System.currentTimeMillis(),
                     odometerKm = absolute,
                     inputMethod = if (trip) InputMethod.TRIP else InputMethod.ABSOLUTE,
                     odometerKind = OdometerKind.READING,
@@ -352,7 +389,12 @@ private fun RefuelRoute(viewModel: DuoFuelViewModel) {
                     errors = listOf(context.getString(R.string.issue_decrease))
                     return@Button
                 }
-                errors = viewModel.saveFuel(draft, confirmDecrease, true)
+                if (!confirmChronology && viewModel.needsChronologyConfirm(draft)) {
+                    confirmChronology = true
+                    errors = listOf(context.getString(R.string.issue_chronology))
+                    return@Button
+                }
+                errors = viewModel.saveFuel(draft, confirmDecrease, confirmChronology)
             },
             modifier = Modifier.heightIn(min = 48.dp),
         ) { Text(stringResource(R.string.save)) }
@@ -369,25 +411,83 @@ private fun copyReceipt(context: android.content.Context, uri: Uri?): String? {
 }
 
 @Composable
-private fun HistoryRoute(viewModel: DuoFuelViewModel) {
+private fun HistoryRoute(viewModel: DuoFuelViewModel, onEditFuel: (String) -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snapshot = state.app.active
+    val context = LocalContext.current
     var filter by remember { mutableStateOf("fuel") }
+    var editingService by remember { mutableStateOf<ServiceRecordCalc?>(null) }
+    var editingExpense by remember { mutableStateOf<ExpenseCalc?>(null) }
+    var serviceCost by remember { mutableStateOf("") }
+    var expenseAmount by remember { mutableStateOf("") }
+    var odometerText by remember { mutableStateOf("") }
+    var panelReset by remember { mutableStateOf(false) }
+    var odometerError by remember { mutableStateOf<String?>(null) }
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
         RowChips(filter) { filter = it }
         when (filter) {
             "service" -> snapshot?.serviceRecords?.forEach { record ->
                 Text(record.serviceType + " · " + record.costMinor + " " + record.currency + if (record.isGbo) " · ГБО" else "")
-                TextButton(onClick = { viewModel.deleteService(record.id) }) { Text(stringResource(R.string.delete)) }
+                androidx.compose.foundation.layout.Row {
+                    TextButton(onClick = {
+                        editingService = record
+                        serviceCost = formatMinor(record.costMinor, record.currency, java.util.Locale.getDefault()).substringBefore(' ')
+                    }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.edit)) }
+                    TextButton(onClick = { viewModel.deleteService(record.id) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.delete)) }
+                }
             }
             "expense" -> snapshot?.expenses?.forEach { expense ->
                 Text(expense.category + " · " + expense.amountMinor + " " + expense.currency)
-                TextButton(onClick = { viewModel.deleteExpense(expense.id) }) { Text(stringResource(R.string.delete)) }
+                androidx.compose.foundation.layout.Row {
+                    TextButton(onClick = {
+                        editingExpense = expense
+                        expenseAmount = formatMinor(expense.amountMinor, expense.currency, java.util.Locale.getDefault()).substringBefore(' ')
+                    }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.edit)) }
+                    TextButton(onClick = { viewModel.deleteExpense(expense.id) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.delete)) }
+                }
             }
-            else -> snapshot?.entries?.forEach { entry ->
-                Text(fuelLabel(LocalContext.current, entry.fuelType) + " · " + entry.quantity + " " + entry.unit + " · " + entry.totalCostMinor + " " + entry.currency + if (entry.isFull) " · " + stringResource(R.string.full) else "")
-                TextButton(onClick = { viewModel.deleteFuel(entry.id) }) { Text(stringResource(R.string.delete)) }
+            else -> {
+                snapshot?.entries?.forEach { entry ->
+                    Text(fuelLabel(LocalContext.current, entry.fuelType) + " · " + entry.quantity + " " + entry.unit + " · " + entry.totalCostMinor + " " + entry.currency + if (entry.isFull) " · " + stringResource(R.string.full) else "")
+                    androidx.compose.foundation.layout.Row {
+                        TextButton(onClick = { onEditFuel(entry.id) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.edit)) }
+                        TextButton(onClick = { viewModel.deleteFuel(entry.id) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.delete)) }
+                    }
+                }
+                Text(stringResource(R.string.odometer_only), style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                OutlinedTextField(odometerText, { odometerText = it }, label = { Text(stringResource(R.string.field_odometer)) }, suffix = { Text("км") }, modifier = Modifier.fillMaxWidthField())
+                RowSwitch(stringResource(R.string.panel_reset), panelReset) { panelReset = it }
+                odometerError?.let { Text(it) }
+                Button(onClick = {
+                    val vehicleId = snapshot?.vehicle?.id ?: return@Button
+                    val km = parseKm(odometerText)
+                    if (km !is Parse.Ok) {
+                        odometerError = issueText(context, (km as Parse.Err).issue)
+                        return@Button
+                    }
+                    val issues = viewModel.saveOdometerReading(vehicleId, System.currentTimeMillis(), km.value, trip = false, panelReset = panelReset)
+                    odometerError = issues.firstOrNull()
+                    if (issues.isEmpty()) odometerText = ""
+                }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save)) }
             }
+        }
+        editingService?.let { record ->
+            OutlinedTextField(serviceCost, { serviceCost = it }, label = { Text(stringResource(R.string.cost)) }, modifier = Modifier.fillMaxWidthField())
+            Button(onClick = {
+                val money = parseMoney(serviceCost, record.currency)
+                if (money !is Parse.Ok) return@Button
+                viewModel.saveService(record.copy(costMinor = money.value))
+                editingService = null
+            }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save)) }
+        }
+        editingExpense?.let { expense ->
+            OutlinedTextField(expenseAmount, { expenseAmount = it }, label = { Text(stringResource(R.string.cost)) }, modifier = Modifier.fillMaxWidthField())
+            Button(onClick = {
+                val money = parseMoney(expenseAmount, expense.currency)
+                if (money !is Parse.Ok) return@Button
+                viewModel.saveExpense(expense.copy(amountMinor = money.value))
+                editingExpense = null
+            }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save)) }
         }
     }
 }
@@ -416,6 +516,7 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
     var expenseAmount by remember { mutableStateOf("0") }
     var includeOperating by remember { mutableStateOf(false) }
     var includeGbo by remember { mutableStateOf(false) }
+    var editingScheduleId by remember { mutableStateOf<String?>(null) }
     val currency = deviceCurrency()
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
         // OPEN-FILTER-DEFAULT: диапазоны из подсказок остаются текстом, в интервал не подставляются.
@@ -426,6 +527,17 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
         Text(stringResource(R.string.hint_tank))
         Text(stringResource(R.string.hint_valves))
         Text(stringResource(R.string.reference_ignored))
+        state.app.active?.schedules?.forEach { schedule ->
+            TextButton(onClick = {
+                type = schedule.serviceType
+                intervalKm = schedule.intervalKm?.toString().orEmpty()
+                intervalDays = schedule.intervalDays?.toString().orEmpty()
+                leadKm = schedule.leadKm?.toString().orEmpty()
+                editingScheduleId = schedule.id
+            }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.edit) + " · " + schedule.serviceType)
+            }
+        }
         state.report?.serviceStatuses?.forEach { status ->
             Text(status.serviceType + " · " + statusLabel(LocalContext.current, status.status))
             Text(stringResource(R.string.forecast) + " 30: " + (status.forecast30.averageKmPerDay?.toPlainString() ?: stringResource(R.string.quality_insufficient)))
@@ -435,22 +547,24 @@ private fun ServiceRoute(viewModel: DuoFuelViewModel) {
         OutlinedTextField(intervalDays, { intervalDays = it }, label = { Text(stringResource(R.string.interval_days)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(leadKm, { leadKm = it }, label = { Text(stringResource(R.string.lead_km)) }, modifier = Modifier.fillMaxWidthField())
         Button(onClick = {
+            val sameType = state.app.active?.schedules?.singleOrNull { it.serviceType == type }
+            val kept = state.app.active?.schedules?.firstOrNull { it.id == editingScheduleId } ?: sameType
             viewModel.saveSchedule(
                 ServiceScheduleCalc(
-                    id = UUID.randomUUID().toString(),
+                    id = kept?.id ?: UUID.randomUUID().toString(),
                     vehicleId = vehicleId,
                     serviceType = type,
                     intervalKm = intervalKm.toIntOrNull(),
                     intervalDays = intervalDays.toIntOrNull(),
-                    dueOdometerKm = null,
-                    dueDateEpochDay = null,
+                    dueOdometerKm = kept?.dueOdometerKm,
+                    dueDateEpochDay = kept?.dueDateEpochDay,
                     leadKm = leadKm.toIntOrNull(),
-                    leadDays = null,
-                    snoozeUntilEpochDay = null,
-                    remindersEnabled = true,
+                    leadDays = kept?.leadDays,
+                    snoozeUntilEpochDay = kept?.snoozeUntilEpochDay,
+                    remindersEnabled = kept?.remindersEnabled ?: true,
                 ),
             )
-        }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.add)) }
+        }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(if (editingScheduleId != null) R.string.save else R.string.add)) }
         OutlinedTextField(workType, { workType = it }, label = { Text(stringResource(R.string.service_work)) }, modifier = Modifier.fillMaxWidthField())
         OutlinedTextField(workCost, { workCost = it }, label = { Text(stringResource(R.string.cost)) }, suffix = { Text(currency) }, modifier = Modifier.fillMaxWidthField())
         RowSwitch(stringResource(R.string.is_gbo), isGbo) { isGbo = it }

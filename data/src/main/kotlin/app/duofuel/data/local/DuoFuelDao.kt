@@ -75,6 +75,9 @@ interface DuoFuelDao {
     @Query("SELECT * FROM odometer_events")
     suspend fun allOdometer(): List<OdometerEventEntity>
 
+    @Query("SELECT * FROM odometer_events WHERE id = :id")
+    suspend fun odometerById(id: String): OdometerEventEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertOdometer(entity: OdometerEventEntity)
 
