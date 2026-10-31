@@ -40,9 +40,10 @@ fun DashboardScreen(
     vehicleName: String,
     empty: Boolean,
     metrics: List<MetricUi>,
-    consumption: List<String>,
+    consumption: List<MetricUi>,
     nearest: String?,
     recent: List<String>,
+    period: String,
     periodMismatch: Boolean,
     payoffText: String?,
     onPeriod: (String) -> Unit,
@@ -60,7 +61,7 @@ fun DashboardScreen(
                 "cycle" to stringResource(R.string.period_cycle),
                 "all" to stringResource(R.string.period_all),
             ).forEach { (key, label) ->
-                FilterChip(selected = false, onClick = { onPeriod(key) }, label = { Text(label) })
+                FilterChip(selected = period == key, onClick = { onPeriod(key) }, label = { Text(label) }, modifier = Modifier.heightIn(min = 48.dp))
             }
         }
         if (empty) {
@@ -72,7 +73,9 @@ fun DashboardScreen(
         metrics.forEachIndexed { index, metric ->
             MetricBlock(metric) { selected = index }
         }
-        consumption.forEach { Text(it) }
+        consumption.forEachIndexed { index, card ->
+            MetricBlock(card) { selected = metrics.size + index }
+        }
         Text(stringResource(R.string.nearest_service), style = MaterialTheme.typography.titleMedium)
         Text(nearest ?: stringResource(R.string.no_service))
         payoffText?.let { Text(it) }
@@ -84,7 +87,7 @@ fun DashboardScreen(
         }
     }
     selected?.let { index ->
-        val metric = metrics[index]
+        val metric = (metrics + consumption).getOrNull(index) ?: return@let
         AlertDialog(
             onDismissRequest = { selected = null },
             confirmButton = {

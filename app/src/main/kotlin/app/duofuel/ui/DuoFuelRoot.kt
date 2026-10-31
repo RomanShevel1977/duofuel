@@ -64,6 +64,7 @@ import app.duofuel.domain.model.FuelType
 import app.duofuel.domain.model.InputMethod
 import app.duofuel.domain.model.OdometerKind
 import app.duofuel.domain.model.Quality
+import app.duofuel.domain.model.RecentEventRef
 import app.duofuel.domain.model.RoiWindow
 import app.duofuel.domain.model.ServiceRecordCalc
 import app.duofuel.domain.model.ServiceScheduleCalc
@@ -150,21 +151,29 @@ fun DuoFuelRoot(viewModel: DuoFuelViewModel = hiltViewModel(LocalContext.current
             composable("dashboard") {
                 val snapshot = state.app.active
                 val report = state.report
+                val dashContext = LocalContext.current
                 DashboardScreen(
                     vehicleName = snapshot?.vehicle?.name ?: stringResource(R.string.profile),
                     empty = snapshot?.entries.isNullOrEmpty(),
                     metrics = report?.let { metricsOf(it) }.orEmpty(),
                     consumption = report?.consumptionByFuel?.map { card ->
-                        val rate = card.rate.ratePer100?.let { "$it ${card.rate.volumeUnit ?: ""}/100" }
-                            ?: stringResource(R.string.quality_insufficient)
-                        fuelLabel(LocalContext.current, card.fuel) + ": " + rate + " · " + qualityLabel(LocalContext.current, card.rate.quality)
+                        val rate = card.rate
+                        MetricUi(
+                            title = fuelLabel(dashContext, card.fuel),
+                            value = rate.ratePer100?.let { "$it ${rate.volumeUnit ?: ""}/100" },
+                            quality = qualityLabel(dashContext, rate.quality),
+                            detail = periodTitle(dashContext, rate.period.labelKey) + " · " +
+                                dashContext.getString(R.string.formula_cycle) + " · " + rate.methodId,
+                            events = rate.inputEventIds.joinToString(),
+                        )
                     }.orEmpty(),
                     nearest = state.app.active?.let { snapshotActive ->
                         report?.nearestService?.let { status ->
                             status.serviceType + " · " + statusLabel(LocalContext.current, status.status)
                         }
                     },
-                    recent = report?.recentEvents?.map { it.kind + " " + (it.odometerKm ?: "") }.orEmpty(),
+                    recent = report?.recentEvents?.asReversed()?.map { recentLine(dashContext, it) }.orEmpty(),
+                    period = periodKey(state.period),
                     periodMismatch = report?.periodMismatch == true,
                     payoffText = report?.roi?.let { roi ->
                         when {
@@ -249,7 +258,7 @@ private fun metricsOf(report: app.duofuel.domain.model.DashboardReport): List<Me
             title = context.getString(title),
             value = value,
             quality = qualityLabel(context, metric.quality),
-            detail = context.getString(formula) + " · " + metric.methodId,
+            detail = periodTitle(context, metric.period.labelKey) + " · " + context.getString(formula) + " · " + metric.methodId,
             events = metric.inputEventIds.joinToString(),
         )
     }
@@ -1231,6 +1240,39 @@ private fun keptFuel(
     currency = currency,
     defaultPriceMinor = price,
 )
+
+private fun periodKey(period: PeriodRequest): String = when (period) {
+    is PeriodRequest.CalendarMonth -> "month"
+    is PeriodRequest.Custom -> "custom"
+    is PeriodRequest.LastNKm -> "last_n"
+    PeriodRequest.LatestControlCycles -> "cycle"
+    PeriodRequest.AllHistory -> "all"
+}
+
+private fun periodTitle(context: android.content.Context, labelKey: String): String = context.getString(
+    when (labelKey) {
+        "cycle" -> R.string.period_cycle
+        "all", "roi_all" -> R.string.period_all
+        "custom" -> R.string.period_custom
+        "last_n" -> R.string.period_last_n
+        "roi_install" -> R.string.roi_title
+        else -> R.string.period_month
+    },
+)
+
+private fun recentLine(context: android.content.Context, event: RecentEventRef): String {
+    val zone = ZoneId.systemDefault()
+    val kind = context.getString(
+        when (event.kind) {
+            "SERVICE" -> R.string.history_service
+            "EXPENSE" -> R.string.history_expense
+            else -> R.string.history_fuel
+        },
+    )
+    val fuel = event.fuelType?.let { " · " + fuelLabel(context, it) }.orEmpty()
+    val km = event.odometerKm?.let { " · $it км" }.orEmpty()
+    return Dates.formatDay(event.occurredAtMs, zone) + " " + Dates.formatTime(event.occurredAtMs, zone) + " · " + kind + fuel + km
+}
 
 private fun Modifier.fillMaxWidthField(): Modifier = fillMaxWidth()
 
