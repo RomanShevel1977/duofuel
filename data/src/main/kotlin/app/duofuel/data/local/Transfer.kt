@@ -163,7 +163,7 @@ internal object ArchiveCodec {
         "attachments" to JSONArray(bundle.attachments.map { attachmentJson(it) }),
     )
 
-    private fun vehicleJson(it: VehicleEntity) = obj(
+    internal fun vehicleJson(it: VehicleEntity) = obj(
         "id" to it.id, "name" to it.name, "make" to it.make, "model" to it.model,
         "year" to it.year, "engine" to it.engine, "injectionType" to it.injectionType,
         "gasFuelType" to it.gasFuelType, "gboGeneration" to it.gboGeneration,
@@ -174,13 +174,13 @@ internal object ArchiveCodec {
         "archivedAt" to it.archivedAt, "source" to it.source,
     )
 
-    private fun fuelConfigJson(it: FuelTypeConfigEntity) = obj(
+    internal fun fuelConfigJson(it: FuelTypeConfigEntity) = obj(
         "id" to it.id, "vehicleId" to it.vehicleId, "fuelType" to it.fuelType,
         "unit" to it.unit, "capacity" to it.capacity, "currency" to it.currency,
         "defaultPriceMinor" to it.defaultPriceMinor,
     )
 
-    private fun fuelJson(it: FuelEntryEntity) = obj(
+    internal fun fuelJson(it: FuelEntryEntity) = obj(
         "id" to it.id, "vehicleId" to it.vehicleId, "fuelType" to it.fuelType,
         "occurredAt" to it.occurredAt, "odometerKm" to it.odometerKm, "quantity" to it.quantity,
         "unit" to it.unit, "unitPriceMinor" to it.unitPriceMinor, "totalCostMinor" to it.totalCostMinor,
@@ -189,14 +189,14 @@ internal object ArchiveCodec {
         "createdAt" to it.createdAt, "updatedAt" to it.updatedAt,
     )
 
-    private fun odoJson(it: OdometerEventEntity) = obj(
+    internal fun odoJson(it: OdometerEventEntity) = obj(
         "id" to it.id, "vehicleId" to it.vehicleId, "occurredAt" to it.occurredAt,
         "odometerKm" to it.odometerKm, "inputMethod" to it.inputMethod, "kind" to it.kind,
         "source" to it.source, "linkedFuelEntryId" to it.linkedFuelEntryId,
         "createdAt" to it.createdAt, "updatedAt" to it.updatedAt,
     )
 
-    private fun serviceJson(it: ServiceRecordEntity) = obj(
+    internal fun serviceJson(it: ServiceRecordEntity) = obj(
         "id" to it.id, "vehicleId" to it.vehicleId, "serviceType" to it.serviceType,
         "occurredAt" to it.occurredAt, "odometerKm" to it.odometerKm, "costMinor" to it.costMinor,
         "currency" to it.currency, "provider" to it.provider, "notes" to it.notes,
@@ -204,7 +204,7 @@ internal object ArchiveCodec {
         "updatedAt" to it.updatedAt,
     )
 
-    private fun scheduleJson(it: ServiceScheduleEntity) = obj(
+    internal fun scheduleJson(it: ServiceScheduleEntity) = obj(
         "id" to it.id, "vehicleId" to it.vehicleId, "serviceType" to it.serviceType,
         "intervalKm" to it.intervalKm, "intervalDays" to it.intervalDays,
         "dueOdometer" to it.dueOdometer, "dueDateEpochDay" to it.dueDateEpochDay,
@@ -213,7 +213,7 @@ internal object ArchiveCodec {
         "createdAt" to it.createdAt, "updatedAt" to it.updatedAt,
     )
 
-    private fun expenseJson(it: ExpenseEntryEntity) = obj(
+    internal fun expenseJson(it: ExpenseEntryEntity) = obj(
         "id" to it.id, "vehicleId" to it.vehicleId, "category" to it.category,
         "occurredAt" to it.occurredAt, "odometerKm" to it.odometerKm, "amountMinor" to it.amountMinor,
         "currency" to it.currency, "includeInOperating" to it.includeInOperating,
@@ -221,7 +221,7 @@ internal object ArchiveCodec {
         "createdAt" to it.createdAt, "updatedAt" to it.updatedAt,
     )
 
-    private fun settingsJson(it: CalculationSettingsEntity) = obj(
+    internal fun settingsJson(it: CalculationSettingsEntity) = obj(
         "id" to it.id, "vehicleId" to it.vehicleId, "baselinePetrolL100" to it.baselinePetrolL100,
         "petrolPriceMinor" to it.petrolPriceMinor, "petrolPriceCurrency" to it.petrolPriceCurrency,
         "petrolPriceIsScenario" to it.petrolPriceIsScenario, "petrolModel" to it.petrolModel,
@@ -229,10 +229,29 @@ internal object ArchiveCodec {
         "createdAt" to it.createdAt, "updatedAt" to it.updatedAt,
     )
 
-    private fun attachmentJson(it: AttachmentEntity) = obj(
+    internal fun attachmentJson(it: AttachmentEntity) = obj(
         "id" to it.id, "ownerType" to it.ownerType, "ownerId" to it.ownerId,
         "localUri" to it.localUri, "mimeType" to it.mimeType, "createdAt" to it.createdAt,
     )
+
+    // OPEN-BACKUP: сравнение по всем сохранённым полям. Порядок ключей в файле не важен.
+    internal fun sameRecord(stored: JSONObject, incoming: JSONObject): Boolean {
+        val keys = buildSet {
+            stored.keys().forEach { add(it) }
+            incoming.keys().forEach { add(it) }
+        }
+        return keys.all { key -> fieldText(stored, key) == fieldText(incoming, key) }
+    }
+
+    private fun fieldText(json: JSONObject, key: String): String {
+        if (!json.has(key) || json.isNull(key)) return ""
+        val value = json.get(key)
+        return if (value is Number) {
+            java.math.BigDecimal(value.toString()).stripTrailingZeros().toPlainString()
+        } else {
+            value.toString()
+        }
+    }
 }
 
 internal data class ArchivePayload(

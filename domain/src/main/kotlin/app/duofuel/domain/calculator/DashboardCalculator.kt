@@ -54,6 +54,8 @@ class DashboardCalculator(
         val selected = selectCycles(request, period, allCycles)
         val mixed = mixedCalc.report(selected, fuels)
         val cards = fuels.map { fuel -> card(fuel, selected[fuel], period) }
+        // §6.2: без известных остатков цикл не занимает место расхода периода. На контрольном цикле он и есть период.
+        val periodCycles = if (period.kind == PeriodKind.CONTROL_CYCLE) selected else selected.mapValues { null }
         val cashflow = costCalc.cashflow(input.fuelEntries, period)
         val travelKm = DistanceCalculator.inTimeRange(
             input.odometerEvents,
@@ -70,7 +72,7 @@ class DashboardCalculator(
             inputEventIds = cashflow.total.inputEventIds,
             extraWarnings = cashflow.total.warnings,
         )
-        val combined = combinedConsumed(mixed, selected, fuels)
+        val combined = combinedConsumed(mixed, periodCycles, fuels)
         val records = input.serviceRecords.filter { inPeriod(it.occurredAtMs, period) }
         val expenses = input.expenses.filter { inPeriod(it.occurredAtMs, period) }
         val currency = combined.currency
@@ -129,7 +131,7 @@ class DashboardCalculator(
         )
         val saving = roiCalc.savingFor(
             input = input,
-            cycles = selected.values.filterNotNull().filter { cycleInside(it, period) || request is PeriodRequest.LatestControlCycles },
+            cycles = periodCycles.values.filterNotNull().filter { cycleInside(it, period) || request is PeriodRequest.LatestControlCycles },
             period = combined.period ?: period,
             entireHistory = false,
         )
@@ -272,6 +274,31 @@ class DashboardCalculator(
     }
 
     private fun card(fuel: FuelType, cycle: CycleResult?, period: Period): FuelConsumptionCard {
+        if (period.kind != PeriodKind.CONTROL_CYCLE) {
+            val ids = cycle?.consumedEntryIds.orEmpty()
+            return FuelConsumptionCard(
+                fuel = fuel,
+                volume = Metric.insufficient(
+                    MethodId.FUEL_CYCLE_FULL_TO_FULL.id,
+                    period,
+                    ids,
+                    listOf(WarningCode.UNKNOWN_LEVEL_NOT_ZERO),
+                ),
+                rate = Metric.insufficient(
+                    MethodId.FUEL_CYCLE_FULL_TO_FULL.id,
+                    period,
+                    ids,
+                    listOf(WarningCode.UNKNOWN_LEVEL_NOT_ZERO),
+                ),
+                consumedMoney = Metric.insufficient(
+                    MethodId.FUEL_COST.id,
+                    period,
+                    ids,
+                    listOf(WarningCode.UNKNOWN_LEVEL_NOT_ZERO),
+                ),
+                cycle = cycle,
+            )
+        }
         if (cycle == null || cycle.rate.quality != Quality.FACTUAL) {
             return FuelConsumptionCard(
                 fuel = fuel,
