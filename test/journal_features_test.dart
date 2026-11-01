@@ -333,10 +333,8 @@ Future<void> _saveFill(
   if (total != null) {
     await tester.enterText(find.byKey(const Key('total')), total);
   }
-  if (full) {
-    await tester.tap(find.byKey(const Key('full-tank')));
-    await tester.pump();
-  }
+  await tester.tap(find.byKey(Key(full ? 'full-tank' : 'not-full')));
+  await tester.pump();
   await tester.tap(find.byKey(const Key('save-fuel')));
   await tester.pumpAndSettle();
 }

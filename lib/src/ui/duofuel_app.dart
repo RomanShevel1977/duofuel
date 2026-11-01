@@ -5,7 +5,6 @@ import 'fuel_form_page.dart';
 import 'home_page.dart';
 import 'journal_page.dart';
 import 'log_controller.dart';
-import 'reset_form_page.dart';
 import 'theme_choice.dart';
 
 class DuoFuelApp extends StatefulWidget {
@@ -109,9 +108,6 @@ class _ShellState extends State<_Shell> {
           PopupMenuButton<String>(
             tooltip: 'Ещё',
             onSelected: (value) {
-              if (value == 'reset' && controller.canWrite) {
-                openReset(context, controller);
-              }
               final choice = switch (value) {
                 'theme-light' => ThemeChoice.light,
                 'theme-dark' => ThemeChoice.dark,
@@ -121,11 +117,6 @@ class _ShellState extends State<_Shell> {
               if (choice != null) widget.onTheme(choice);
             },
             itemBuilder: (context) => [
-              if (controller.canWrite)
-                const PopupMenuItem(
-                  value: 'reset',
-                  child: Text('Замена панели'),
-                ),
               PopupMenuItem(
                 value: 'theme-system',
                 child: _ThemeRow(

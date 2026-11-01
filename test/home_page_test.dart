@@ -3,6 +3,7 @@ import 'package:duofuel/src/data/fuel_log.dart';
 import 'package:duofuel/src/data/memory_fuel_log.dart';
 import 'package:duofuel/src/model/records.dart';
 import 'package:duofuel/src/ui/duofuel_app.dart';
+import 'package:duofuel/src/ui/fuel_form_page.dart';
 import 'package:duofuel/src/ui/log_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -187,6 +188,8 @@ void main() {
     expect(find.text('Прошлое показание: 1000 км'), findsOneWidget);
     expect(find.textContaining('0,00'), findsNothing);
     await tester.enterText(find.byKey(const Key('quantity')), '10');
+    await tester.tap(find.byKey(const Key('not-full')));
+    await tester.pump();
     await tester.enterText(find.byKey(const Key('odometer')), '900');
     await tester.tap(find.byKey(const Key('save-fuel')));
     await tester.pump();
@@ -213,6 +216,8 @@ void main() {
     await tester.pump();
     expect(find.text('Цена за литр\n55,00 грн/л'), findsOneWidget);
     await tester.enterText(find.byKey(const Key('odometer')), '1000');
+    await tester.tap(find.byKey(const Key('not-full')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('save-fuel')));
     await tester.pumpAndSettle();
     final saved = controller.entries.single;
@@ -269,6 +274,62 @@ void main() {
     await tester.pumpAndSettle();
     expect(_text(tester, 'consumption-lpg-latest'), 'Недостаточно данных');
     expect(find.text('Нужны две полные заправки газа.'), findsWidgets);
+  });
+
+  testWidgets('a new fill asks for a full tank before it is saved', (
+    tester,
+  ) async {
+    final controller = await _pump(tester);
+    await tester.tap(find.byKey(const Key('fab-fuel')));
+    await tester.pumpAndSettle();
+    expect(find.text(fullTankPrompt), findsOneWidget);
+    expect(find.text(fullTankChosen), findsNothing);
+    await tester.enterText(find.byKey(const Key('quantity')), '40');
+    await tester.enterText(find.byKey(const Key('odometer')), '1000');
+    await tester.tap(find.byKey(const Key('save-fuel')));
+    await tester.pump();
+    expect(controller.entries, isEmpty);
+    expect(find.byKey(const Key('full-tank-hint')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('full-tank')));
+    await tester.pump();
+    expect(find.text(fullTankChosen), findsOneWidget);
+    await tester.tap(find.byKey(const Key('save-fuel')));
+    await tester.pumpAndSettle();
+    expect(controller.entries.single.isFull, isTrue);
+  });
+
+  testWidgets('panel replacement sits by the odometer, not by the theme', (
+    tester,
+  ) async {
+    final controller = await _pump(tester);
+    await tester.tap(find.byTooltip('Ещё'));
+    await tester.pumpAndSettle();
+    expect(find.text('Замена панели'), findsNothing);
+    expect(find.text('Тёмная'), findsOneWidget);
+    await tester.tap(find.text('Тёмная'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('fab-fuel')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Если меняли панель, новое показание вводится здесь, а не в заправке.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('open-reset')));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Новое показание после замены панели'),
+      findsOneWidget,
+    );
+    await tester.enterText(find.byKey(const Key('reset-odometer')), '50');
+    await tester.tap(find.byKey(const Key('save-reset')));
+    await tester.pumpAndSettle();
+    expect(find.text('Заправка'), findsWidgets);
+    expect(controller.resets, hasLength(1));
+    expect(controller.resets.single.odometerKm, 50);
+    expect(controller.entries, isEmpty);
   });
 }
 
@@ -328,10 +389,8 @@ Future<void> _saveFill(
   if (total != null) {
     await tester.enterText(find.byKey(const Key('total')), total);
   }
-  if (full) {
-    await tester.tap(find.byKey(const Key('full-tank')));
-    await tester.pump();
-  }
+  await tester.tap(find.byKey(Key(full ? 'full-tank' : 'not-full')));
+  await tester.pump();
   await tester.tap(find.byKey(const Key('save-fuel')));
   await tester.pumpAndSettle();
 }
