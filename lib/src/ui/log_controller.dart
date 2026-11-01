@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../calc/fuel_cycle.dart';
+import '../calc/price_average.dart';
 import '../data/fuel_log.dart';
 import '../model/records.dart';
 
@@ -19,6 +20,8 @@ class LogController extends ChangeNotifier {
 
   FuelConsumption consumption(FuelType fuel) =>
       consumptionFor(entries, resets, fuel);
+
+  PriceAverage price(FuelType fuel) => averagePrice(entries, fuel);
 
   Future<void> reload() async {
     try {

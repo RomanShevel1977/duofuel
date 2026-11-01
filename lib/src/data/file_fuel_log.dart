@@ -53,6 +53,8 @@ Map<String, Object?> encodeSnapshot(FuelSnapshot snapshot) {
           'unit': entry.unit,
           'isFull': entry.isFull,
           'createdAtMs': entry.createdAtMs,
+          if (entry.totalMinor != null) 'totalMinor': entry.totalMinor,
+          if (entry.totalMinor != null) 'currency': entry.currency,
         },
     ],
     'resets': [
@@ -126,6 +128,7 @@ FuelEntry _entry(Object? raw) {
   if (!(liters > 0) || !liters.isFinite) {
     throw const FuelLogReadException(fuelLogReadError);
   }
+  final price = _price(raw);
   return FuelEntry(
     id: id,
     fuelType: parsedFuel,
@@ -135,7 +138,28 @@ FuelEntry _entry(Object? raw) {
     unit: unit,
     isFull: full,
     createdAtMs: created,
+    totalMinor: price?.minor,
+    currency: price?.currency,
   );
+}
+
+class _StoredPrice {
+  const _StoredPrice(this.minor, this.currency);
+
+  final int minor;
+  final String currency;
+}
+
+_StoredPrice? _price(Map raw) {
+  if (!raw.containsKey('totalMinor') && !raw.containsKey('currency')) {
+    return null;
+  }
+  final minor = raw['totalMinor'];
+  final currency = raw['currency'];
+  if (minor is! int || minor < 0 || currency is! String || currency.isEmpty) {
+    throw const FuelLogReadException(fuelLogReadError);
+  }
+  return _StoredPrice(minor, currency);
 }
 
 OdometerReset _reset(Object? raw) {

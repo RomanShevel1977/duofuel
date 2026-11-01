@@ -1,4 +1,5 @@
 import '../calc/fuel_cycle.dart';
+import '../calc/price_average.dart';
 import '../model/records.dart';
 
 const formulaFootnote =
@@ -84,6 +85,50 @@ String dayHeading(DateTime day) {
 
 String formatWhenMs(int milliseconds) =>
     formatWhen(DateTime.fromMillisecondsSinceEpoch(milliseconds));
+
+String formatMoney(int minor) {
+  final abs = minor.abs();
+  final whole = abs ~/ 100;
+  final frac = (abs % 100).toString().padLeft(2, '0');
+  final sign = minor < 0 ? '-' : '';
+  return '$sign$whole,$frac грн';
+}
+
+String formatTotalInput(int minor) {
+  final abs = minor.abs();
+  final whole = abs ~/ 100;
+  final frac = abs % 100;
+  final sign = minor < 0 ? '-' : '';
+  if (frac == 0) return '$sign$whole';
+  if (frac % 10 == 0) return '$sign$whole,${frac ~/ 10}';
+  return '$sign$whole,${frac.toString().padLeft(2, '0')}';
+}
+
+String priceValue(PriceAverage average) {
+  if (!average.hasPrice) return 'Недостаточно данных';
+  final perLitre = average.totalMinor! / average.liters! / 100;
+  return '${perLitre.toStringAsFixed(2).replaceAll('.', ',')} грн/л';
+}
+
+String priceDetail(PriceAverage average) {
+  if (average.mixedCurrency) return 'Разные валюты не складываются.';
+  final money = average.totalMinor;
+  final liters = average.liters;
+  if (!average.hasPrice || money == null || liters == null) {
+    return 'Появится по заправкам, у которых указана сумма чека.';
+  }
+  return '${formatMoney(money)} на ${formatLiters(liters)} л · ${average.fillCount} ${fillsWord(average.fillCount)}';
+}
+
+String fillsWord(int count) {
+  final mod10 = count % 10;
+  final mod100 = count % 100;
+  if (mod10 == 1 && mod100 != 11) return 'заправка';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return 'заправки';
+  }
+  return 'заправок';
+}
 
 String cyclesWord(int count) {
   final mod10 = count % 10;

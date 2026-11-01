@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../calc/price_average.dart';
 import '../calc/validation.dart';
 import '../model/ids.dart';
 import '../model/records.dart';
@@ -44,6 +45,11 @@ class _FuelFormPageState extends State<FuelFormPage> {
   late final TextEditingController _odometer = TextEditingController(
     text: widget.existing == null ? '' : widget.existing!.odometerKm.toString(),
   );
+  late final TextEditingController _total = TextEditingController(
+    text: widget.existing?.totalMinor == null
+        ? ''
+        : formatTotalInput(widget.existing!.totalMinor!),
+  );
   List<FieldIssue> _issues = const [];
 
   DateTime _initialDate() {
@@ -56,6 +62,7 @@ class _FuelFormPageState extends State<FuelFormPage> {
   void dispose() {
     _quantity.dispose();
     _odometer.dispose();
+    _total.dispose();
     super.dispose();
   }
 
@@ -67,6 +74,24 @@ class _FuelFormPageState extends State<FuelFormPage> {
       if (issue.field == field) return issue.line;
     }
     return null;
+  }
+
+  String _totalHelp() {
+    final priced = [
+      for (final entry in widget.controller.entries)
+        if (entry.fuelType == _fuel &&
+            entry.id != widget.existing?.id &&
+            entry.totalMinor != null)
+          entry,
+    ];
+    if (priced.isEmpty) return 'Необязательно. Сумма чека в гривнах.';
+    priced.sort((a, b) => b.sortKey.compareTo(a.sortKey));
+    final last = priced.first;
+    final text = priceValue(averagePrice([last], _fuel));
+    if (text == 'Недостаточно данных') {
+      return 'Необязательно. Сумма чека в гривнах.';
+    }
+    return 'Прошлая цена: $text. Сумму можно не указывать.';
   }
 
   String _odometerHelp() {
@@ -107,10 +132,12 @@ class _FuelFormPageState extends State<FuelFormPage> {
     final issues = [
       ...validateQuantity(_quantity.text),
       ...validateOdometer(_odometer.text),
+      ...validateTotal(_total.text),
     ];
     setState(() => _issues = issues);
     if (issues.isNotEmpty) return;
     final existing = widget.existing;
+    final totalMinor = parseTotalMinor(_total.text);
     final entry = FuelEntry(
       id: existing?.id ?? newId(),
       fuelType: _fuel,
@@ -121,6 +148,8 @@ class _FuelFormPageState extends State<FuelFormPage> {
       isFull: _full,
       createdAtMs:
           existing?.createdAtMs ?? DateTime.now().millisecondsSinceEpoch,
+      totalMinor: totalMinor,
+      currency: totalMinor == null ? null : uahCurrency,
     );
     final messenger = ScaffoldMessenger.of(context);
     await widget.controller.saveEntry(entry);
@@ -201,6 +230,18 @@ class _FuelFormPageState extends State<FuelFormPage> {
               suffixText: 'л',
               helperText: 'Литры, можно с запятой',
               errorText: _issueFor(quantityField),
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            key: const Key('total'),
+            controller: _total,
+            decoration: InputDecoration(
+              labelText: 'Сумма чека',
+              suffixText: 'грн',
+              helperText: _totalHelp(),
+              errorText: _issueFor(totalField),
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),

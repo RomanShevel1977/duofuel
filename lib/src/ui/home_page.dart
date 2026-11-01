@@ -141,6 +141,14 @@ class _FuelCard extends StatelessWidget {
       detail: averageDetail(report.average),
       factual: report.average.litersPer100 != null,
     );
+    final price = controller.price(fuel);
+    final priceReadout = _Readout(
+      label: 'Средняя цена',
+      valueKey: Key('price-${fuel.name}-average'),
+      value: priceValue(price),
+      detail: priceDetail(price),
+      factual: price.hasPrice,
+    );
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -191,6 +199,8 @@ class _FuelCard extends StatelessWidget {
                 );
               },
             ),
+            const SizedBox(height: 16),
+            priceReadout,
             if (report.unclosed != null) ...[
               const SizedBox(height: 12),
               DecoratedBox(

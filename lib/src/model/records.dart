@@ -1,5 +1,5 @@
-/// Записи, без которых считается расход бензина и LPG.
-/// Деньги, сервис, CNG и второй автомобиль в эту модель не входят.
+/// Записи расхода бензина и LPG и сумма чека заправки.
+/// Сервис, CNG и второй автомобиль в эту модель не входят.
 enum FuelType {
   petrol('PETROL'),
   lpg('LPG');
@@ -49,6 +49,8 @@ class FuelEntry {
     required this.unit,
     required this.isFull,
     required this.createdAtMs,
+    this.totalMinor,
+    this.currency,
   });
 
   final String id;
@@ -60,6 +62,12 @@ class FuelEntry {
   final bool isFull;
   final int createdAtMs;
 
+  /// Сумма чека в минимальных единицах валюты. Пустое поле — не ноль.
+  final int? totalMinor;
+
+  /// Валюта суммы чека. Для новой записи это UAH, как в прежнем приложении.
+  final String? currency;
+
   SortKey get sortKey => SortKey(occurredAtMs, odometerKm, createdAtMs, id);
 
   FuelEntry copyWith({
@@ -69,6 +77,8 @@ class FuelEntry {
     double? quantity,
     String? unit,
     bool? isFull,
+    int? totalMinor,
+    String? currency,
   }) {
     return FuelEntry(
       id: id,
@@ -79,6 +89,8 @@ class FuelEntry {
       unit: unit ?? this.unit,
       isFull: isFull ?? this.isFull,
       createdAtMs: createdAtMs,
+      totalMinor: totalMinor ?? this.totalMinor,
+      currency: currency ?? this.currency,
     );
   }
 }

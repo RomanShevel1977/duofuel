@@ -33,6 +33,24 @@ void main() {
     expect(validateName('  ').single.line, 'Имя: нужно заполнить');
   });
 
+  test('receipt total keeps kopecks and may be empty', () {
+    expect(validateTotal(''), isEmpty);
+    expect(parseTotalMinor(''), isNull);
+    expect(parseTotalMinor('2200'), 220000);
+    expect(parseTotalMinor('1 100,50'), 110050);
+    expect(parseTotalMinor('10,500'), 1050);
+    expect(parseTotalMinor('0'), 0);
+    expect(
+      validateTotal('-1').single.line,
+      'Сумма чека: отрицательное значение не принимается',
+    );
+    expect(
+      validateTotal('1,234').single.line,
+      'Сумма чека: лишние знаки после запятой',
+    );
+    expect(validateTotal('abc').single.line, 'Сумма чека: не число');
+  });
+
   test('rates use a decimal comma and do not invent a zero', () {
     expect(formatRate(10), '10,0 л/100 км');
     expect(formatRate(8), '8,0 л/100 км');

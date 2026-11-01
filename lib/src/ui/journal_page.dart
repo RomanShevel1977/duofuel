@@ -119,8 +119,9 @@ class _JournalTile extends StatelessWidget {
     final when = DateTime.fromMillisecondsSinceEpoch(row.millis);
     final odometer = entry?.odometerKm ?? reset!.odometerKm;
     final gas = entry?.fuelType == FuelType.lpg;
+    final paid = entry?.totalMinor;
     final subtitle =
-        '${gas ? 'LPG · ' : ''}${formatClock(when)} · $odometer км';
+        '${gas ? 'LPG · ' : ''}${formatClock(when)} · $odometer км${paid == null ? '' : ' · ${formatMoney(paid)}'}';
     final avatarColor = entry == null
         ? scheme.tertiaryContainer
         : entry.isFull
