@@ -18,27 +18,78 @@ class JournalPage extends StatelessWidget {
       for (final entry in controller.entries) _Row.entry(entry),
       for (final reset in controller.resets) _Row.reset(reset),
     ]..sort((a, b) => b.key.compareTo(a.key));
+    if (rows.isEmpty) return const _EmptyJournal();
+    final groups = <_DayGroup>[];
+    for (final row in rows) {
+      final when = DateTime.fromMillisecondsSinceEpoch(row.millis);
+      final day = DateTime(when.year, when.month, when.day);
+      if (groups.isEmpty || groups.last.day != day) {
+        groups.add(_DayGroup(day, [row]));
+      } else {
+        groups.last.rows.add(row);
+      }
+    }
+    final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 128),
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton(
-            onPressed: () => openReset(context, controller),
-            child: const Text('Замена панели'),
+        for (final group in groups) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+            child: Text(
+              dayHeading(group.day),
+              style: text.titleSmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        if (rows.isEmpty)
-          const Text('Пока нет заправок.')
-        else
-          for (final row in rows) ...[
+          for (final row in group.rows) ...[
             _JournalTile(controller: controller, row: row),
             const SizedBox(height: 8),
           ],
+        ],
       ],
     );
   }
+}
+
+class _EmptyJournal extends StatelessWidget {
+  const _EmptyJournal();
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.local_gas_station_outlined,
+              size: 56,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 12),
+            Text('Пока нет заправок', style: text.titleMedium),
+            const SizedBox(height: 8),
+            Text(
+              'Нажмите «Заправка» внизу. Отметьте полный бак, если заправились до отсечки.',
+              style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DayGroup {
+  _DayGroup(this.day, this.rows);
+
+  final DateTime day;
+  final List<_Row> rows;
 }
 
 class _Row {
@@ -49,6 +100,8 @@ class _Row {
   final OdometerReset? reset;
 
   SortKey get key => entry?.sortKey ?? reset!.sortKey;
+
+  int get millis => entry?.occurredAtMs ?? reset!.occurredAtMs;
 }
 
 class _JournalTile extends StatelessWidget {
@@ -61,13 +114,32 @@ class _JournalTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final entry = row.entry;
     final reset = row.reset;
+    final scheme = Theme.of(context).colorScheme;
     final title = entry != null ? entryTitle(entry) : 'Замена панели';
-    final when = entry?.occurredAtMs ?? reset!.occurredAtMs;
+    final when = DateTime.fromMillisecondsSinceEpoch(row.millis);
     final odometer = entry?.odometerKm ?? reset!.odometerKm;
+    final gas = entry?.fuelType == FuelType.lpg;
+    final subtitle =
+        '${gas ? 'LPG · ' : ''}${formatClock(when)} · $odometer км';
+    final avatarColor = entry == null
+        ? scheme.tertiaryContainer
+        : entry.isFull
+        ? scheme.primaryContainer
+        : scheme.surfaceContainerHighest;
+    final avatarInk = entry == null
+        ? scheme.onTertiaryContainer
+        : entry.isFull
+        ? scheme.onPrimaryContainer
+        : scheme.onSurface;
     return Card(
       child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: avatarColor,
+          foregroundColor: avatarInk,
+          child: Text(entry == null ? 'П' : fuelMark(entry.fuelType)),
+        ),
         title: Text(title),
-        subtitle: Text('${formatWhenMs(when)} · $odometer км'),
+        subtitle: Text(subtitle),
         onTap: () {
           if (entry != null) {
             openFuel(context, controller, existing: entry);
@@ -77,6 +149,7 @@ class _JournalTile extends StatelessWidget {
         },
         trailing: IconButton(
           tooltip: 'Удалить',
+          color: scheme.error,
           onPressed: () async {
             final accepted = await confirmDelete(context);
             if (!accepted) return;

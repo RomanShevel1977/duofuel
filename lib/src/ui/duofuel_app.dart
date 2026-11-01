@@ -5,6 +5,7 @@ import 'fuel_form_page.dart';
 import 'home_page.dart';
 import 'journal_page.dart';
 import 'log_controller.dart';
+import 'reset_form_page.dart';
 
 class DuoFuelApp extends StatefulWidget {
   const DuoFuelApp({super.key, required this.controller});
@@ -72,7 +73,21 @@ class _ShellState extends State<_Shell> {
   Widget build(BuildContext context) {
     final controller = widget.controller;
     return Scaffold(
-      appBar: AppBar(title: const Text('DuoFuel')),
+      appBar: AppBar(
+        title: const Text('DuoFuel'),
+        actions: [
+          if (controller.canWrite)
+            PopupMenuButton<String>(
+              tooltip: 'Ещё',
+              onSelected: (value) {
+                if (value == 'reset') openReset(context, controller);
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'reset', child: Text('Замена панели')),
+              ],
+            ),
+        ],
+      ),
       body: _body(controller),
       floatingActionButton: controller.canWrite
           ? FloatingActionButton.extended(
@@ -120,14 +135,36 @@ ThemeData _theme(Brightness brightness) {
     seedColor: const Color(0xFF1F6B4A),
     brightness: brightness,
   );
+  final buttonShape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(12),
+  );
   return ThemeData(
     colorScheme: color,
     useMaterial3: true,
+    inputDecorationTheme: const InputDecorationTheme(
+      filled: true,
+      border: OutlineInputBorder(),
+    ),
+    cardTheme: CardThemeData(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: color.outlineVariant),
+      ),
+    ),
     filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
+      style: FilledButton.styleFrom(
+        minimumSize: const Size.fromHeight(48),
+        shape: buttonShape,
+      ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        shape: buttonShape,
+      ),
     ),
+    navigationBarTheme: const NavigationBarThemeData(height: 72),
   );
 }
