@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../calc/odometer_order.dart';
 import '../calc/price_average.dart';
 import '../calc/validation.dart';
 import '../model/ids.dart';
@@ -32,6 +33,9 @@ class FuelFormPage extends StatefulWidget {
 }
 
 class _FuelFormPageState extends State<FuelFormPage> {
+  late final String _entryId = widget.existing?.id ?? newId();
+  late final int _createdAtMs =
+      widget.existing?.createdAtMs ?? DateTime.now().millisecondsSinceEpoch;
   late FuelType _fuel =
       widget.existing?.fuelType ?? lastFuelType(widget.controller.entries);
   late bool _full = widget.existing?.isFull ?? false;
@@ -52,6 +56,18 @@ class _FuelFormPageState extends State<FuelFormPage> {
   );
   List<FieldIssue> _issues = const [];
 
+  @override
+  void initState() {
+    super.initState();
+    _quantity.addListener(_refreshDraft);
+    _total.addListener(_refreshDraft);
+    _odometer.addListener(_refreshDraft);
+  }
+
+  void _refreshDraft() {
+    if (mounted) setState(() {});
+  }
+
   DateTime _initialDate() {
     final existing = widget.existing;
     if (existing == null) return DateTime.now();
@@ -60,6 +76,9 @@ class _FuelFormPageState extends State<FuelFormPage> {
 
   @override
   void dispose() {
+    _quantity.removeListener(_refreshDraft);
+    _total.removeListener(_refreshDraft);
+    _odometer.removeListener(_refreshDraft);
     _quantity.dispose();
     _odometer.dispose();
     _total.dispose();
@@ -95,13 +114,25 @@ class _FuelFormPageState extends State<FuelFormPage> {
   }
 
   String _odometerHelp() {
-    final previous = previousOdometerKm(
-      widget.controller.entries,
-      _fuel,
-      exceptId: widget.existing?.id,
+    final previous = previousOdometerHint(
+      entries: widget.controller.entries,
+      resets: widget.controller.resets,
+      occurredAtMs: _when.millisecondsSinceEpoch,
+      createdAtMs: _createdAtMs,
+      exceptEntryId: _entryId,
+      savedOdometerKm: widget.existing?.odometerKm,
     );
     if (previous == null) return 'Целые километры с панели';
     return 'Прошлое показание: $previous км';
+  }
+
+  String _enteredPriceText() {
+    final price = formatEnteredUnitPrice(
+      parseTotalMinor(_total.text),
+      parseQuantity(_quantity.text),
+    );
+    if (price == null) return 'Цена за литр\nиз суммы и литров';
+    return 'Цена за литр\n$price';
   }
 
   Future<void> _pickDate() async {
@@ -134,20 +165,32 @@ class _FuelFormPageState extends State<FuelFormPage> {
       ...validateOdometer(_odometer.text),
       ...validateTotal(_total.text),
     ];
+    if (issues.isEmpty) {
+      issues.addAll(
+        validateOdometerNotLower(
+          odometerKm: parseOdometer(_odometer.text)!,
+          occurredAtMs: _when.millisecondsSinceEpoch,
+          createdAtMs: _createdAtMs,
+          id: _entryId,
+          entries: widget.controller.entries,
+          resets: widget.controller.resets,
+          savedOdometerKm: widget.existing?.odometerKm,
+        ),
+      );
+    }
     setState(() => _issues = issues);
     if (issues.isNotEmpty) return;
     final existing = widget.existing;
     final totalMinor = parseTotalMinor(_total.text);
     final entry = FuelEntry(
-      id: existing?.id ?? newId(),
+      id: _entryId,
       fuelType: _fuel,
       occurredAtMs: _when.millisecondsSinceEpoch,
       odometerKm: parseOdometer(_odometer.text)!,
       quantity: parseQuantity(_quantity.text)!,
       unit: existing?.unit ?? 'L',
       isFull: _full,
-      createdAtMs:
-          existing?.createdAtMs ?? DateTime.now().millisecondsSinceEpoch,
+      createdAtMs: _createdAtMs,
       totalMinor: totalMinor,
       currency: totalMinor == null ? null : uahCurrency,
     );
@@ -249,16 +292,37 @@ class _FuelFormPageState extends State<FuelFormPage> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
           const SizedBox(height: 12),
-          TextField(
-            key: const Key('total'),
-            controller: _total,
-            decoration: InputDecoration(
-              labelText: 'Сумма чека',
-              suffixText: 'грн',
-              helperText: _totalHelp(),
-              errorText: _issueFor(totalField),
-            ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const Key('total'),
+                  controller: _total,
+                  decoration: InputDecoration(
+                    labelText: 'Сумма чека',
+                    suffixText: 'грн',
+                    helperText: _totalHelp(),
+                    errorText: _issueFor(totalField),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 124,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    _enteredPriceText(),
+                    key: const Key('entered-unit-price'),
+                    style: text.bodyMedium,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           TextField(
