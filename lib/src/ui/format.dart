@@ -8,8 +8,43 @@ const formulaFootnote =
 
 String fuelLabel(FuelType fuel) => switch (fuel) {
   FuelType.petrol => 'Бензин',
+  FuelType.lpg => 'Газ',
+};
+
+String fuelMark(FuelType fuel) => switch (fuel) {
+  FuelType.petrol => 'Б',
+  FuelType.lpg => 'Г',
+};
+
+String fuelHint(FuelType fuel) => switch (fuel) {
+  FuelType.petrol => 'Бензин',
   FuelType.lpg => 'LPG',
 };
+
+FuelType lastFuelType(List<FuelEntry> entries) {
+  FuelEntry? latest;
+  for (final entry in entries) {
+    if (latest == null || entry.sortKey.compareTo(latest.sortKey) > 0) {
+      latest = entry;
+    }
+  }
+  return latest?.fuelType ?? FuelType.petrol;
+}
+
+int? previousOdometerKm(
+  List<FuelEntry> entries,
+  FuelType fuel, {
+  String? exceptId,
+}) {
+  FuelEntry? latest;
+  for (final entry in entries) {
+    if (entry.fuelType != fuel || entry.id == exceptId) continue;
+    if (latest == null || entry.sortKey.compareTo(latest.sortKey) > 0) {
+      latest = entry;
+    }
+  }
+  return latest?.odometerKm;
+}
 
 String formatRate(double value) =>
     '${value.toStringAsFixed(1).replaceAll('.', ',')} л/100 км';
@@ -29,7 +64,22 @@ String formatLiters(double value) {
 
 String formatWhen(DateTime date) {
   String two(int number) => number.toString().padLeft(2, '0');
-  return '${two(date.day)}.${two(date.month)}.${date.year} ${two(date.hour)}:${two(date.minute)}';
+  return '${two(date.day)}.${two(date.month)}.${date.year} ${formatClock(date)}';
+}
+
+String formatClock(DateTime date) {
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(date.hour)}:${two(date.minute)}';
+}
+
+String dayHeading(DateTime day) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final target = DateTime(day.year, day.month, day.day);
+  if (target == today) return 'Сегодня';
+  if (target == today.subtract(const Duration(days: 1))) return 'Вчера';
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(target.day)}.${two(target.month)}.${target.year}';
 }
 
 String formatWhenMs(int milliseconds) =>
@@ -51,7 +101,7 @@ String latestValue(CycleResult? cycle) {
 
 String latestDetail(CycleResult? cycle) {
   if (cycle == null) {
-    return 'Нет закрытого цикла. Неизвестный остаток не считается нулём.';
+    return 'Отметьте две полные заправки.';
   }
   final rate = cycle.ratePer100;
   final volume = cycle.volume;
@@ -82,7 +132,7 @@ String averageDetail(FuelAverage average) {
   final volume = average.volumeLiters;
   final distance = average.distanceKm;
   if (average.litersPer100 == null || volume == null || distance == null) {
-    return 'Нет закрытых циклов с положительной дистанцией. Неизвестный остаток не считается нулём.';
+    return 'Появится после первого закрытого цикла.';
   }
   return 'Фактический · ${formatLiters(volume)} л на $distance км · ${average.cycleCount} ${cyclesWord(average.cycleCount)}';
 }

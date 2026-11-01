@@ -77,11 +77,11 @@ class _RenameDialogState extends State<_RenameDialog> {
           TextField(
             key: const Key('vehicle-name'),
             controller: _name,
-            decoration: const InputDecoration(labelText: 'Имя'),
+            decoration: InputDecoration(labelText: 'Имя', errorText: _issue),
             autofocus: true,
+            textCapitalization: TextCapitalization.sentences,
             onSubmitted: (_) => _save(),
           ),
-          if (_issue != null) ...[const SizedBox(height: 8), Text(_issue!)],
         ],
       ),
       actions: [

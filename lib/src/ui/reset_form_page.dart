@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../calc/validation.dart';
 import '../model/ids.dart';
 import '../model/records.dart';
-import 'format.dart';
 import 'log_controller.dart';
+import 'when_buttons.dart';
 
 void openReset(
   BuildContext context,
@@ -52,6 +52,13 @@ class _ResetFormPageState extends State<ResetFormPage> {
   DateTime get _when =>
       DateTime(_date.year, _date.month, _date.day, _time.hour, _time.minute);
 
+  String? get _odometerIssue {
+    for (final issue in _issues) {
+      if (issue.field == odometerField) return issue.line;
+    }
+    return null;
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -93,49 +100,51 @@ class _ResetFormPageState extends State<ResetFormPage> {
     await widget.controller.saveReset(reset);
     if (!mounted) return;
     Navigator.pop(context);
-    messenger.showSnackBar(const SnackBar(content: Text('Запись сохранена')));
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Замена панели сохранена')),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Замена панели')),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: FilledButton(
+            key: const Key('save-reset'),
+            onPressed: _save,
+            child: const Text('Сохранить'),
+          ),
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text(
-            'Новое показание одометра после замены панели. Цикл, внутри которого стоит эта отметка, не получает расход: старая и новая шкалы не складываются.',
+          Text(
+            'Новое показание после замены панели. Цикл, который пересекает эту отметку, останется без расхода: старые и новые километры не складываются.',
+            style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 16),
           TextField(
             key: const Key('reset-odometer'),
             controller: _odometer,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Одометр, км',
               suffixText: 'км',
+              helperText: 'Целые километры с новой панели',
+              errorText: _odometerIssue,
             ),
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: _pickDate,
-            child: Text('Дата: ${formatWhen(_when).split(' ').first}'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton(
-            onPressed: _pickTime,
-            child: Text('Время: ${formatWhen(_when).split(' ').last}'),
-          ),
-          const SizedBox(height: 12),
-          for (final issue in _issues)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(issue.line),
-            ),
-          FilledButton(
-            key: const Key('save-reset'),
-            onPressed: _save,
-            child: const Text('Сохранить'),
+          WhenButtons(
+            when: _when,
+            onPickDate: _pickDate,
+            onPickTime: _pickTime,
           ),
         ],
       ),
