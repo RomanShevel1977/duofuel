@@ -17,24 +17,75 @@ class WhenButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final parts = formatWhen(when).split(' ');
+    final text = Theme.of(context).textTheme;
     return Row(
       children: [
         Expanded(
-          child: OutlinedButton.icon(
+          child: _WhenButton(
+            caption: 'Дата',
+            value: parts.first,
+            icon: Icons.calendar_today_outlined,
             onPressed: onPickDate,
-            icon: const Icon(Icons.calendar_today_outlined),
-            label: Text(parts.first),
+            valueStyle: text.titleMedium,
+            captionStyle: text.labelMedium,
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: OutlinedButton.icon(
+          child: _WhenButton(
+            caption: 'Время',
+            value: parts.last,
+            icon: Icons.schedule,
             onPressed: onPickTime,
-            icon: const Icon(Icons.schedule),
-            label: Text(parts.last),
+            valueStyle: text.titleMedium,
+            captionStyle: text.labelMedium,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _WhenButton extends StatelessWidget {
+  const _WhenButton({
+    required this.caption,
+    required this.value,
+    required this.icon,
+    required this.onPressed,
+    required this.valueStyle,
+    required this.captionStyle,
+  });
+
+  final String caption;
+  final String value;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final TextStyle? valueStyle;
+  final TextStyle? captionStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(48, 64),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      onPressed: onPressed,
+      child: Row(
+        children: [
+          Icon(icon),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(caption, style: captionStyle),
+                Text(value, style: valueStyle),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
