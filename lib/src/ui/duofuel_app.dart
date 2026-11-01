@@ -6,21 +6,37 @@ import 'home_page.dart';
 import 'journal_page.dart';
 import 'log_controller.dart';
 import 'reset_form_page.dart';
+import 'theme_choice.dart';
 
 class DuoFuelApp extends StatefulWidget {
-  const DuoFuelApp({super.key, required this.controller});
+  const DuoFuelApp({super.key, required this.controller, this.onExportCsv});
 
   final LogController controller;
+  final Future<void> Function(String csv)? onExportCsv;
 
   @override
   State<DuoFuelApp> createState() => _DuoFuelAppState();
 }
 
 class _DuoFuelAppState extends State<DuoFuelApp> {
+  ThemeChoice _themeChoice = ThemeChoice.system;
+
   @override
   void initState() {
     super.initState();
     widget.controller.reload();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final choice = await readThemeChoice();
+    if (!mounted) return;
+    setState(() => _themeChoice = choice);
+  }
+
+  Future<void> _setTheme(ThemeChoice choice) async {
+    setState(() => _themeChoice = choice);
+    await writeThemeChoice(choice);
   }
 
   @override
@@ -36,15 +52,29 @@ class _DuoFuelAppState extends State<DuoFuelApp> {
       ],
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
-      home: _Shell(controller: widget.controller),
+      themeMode: themeModeOf(_themeChoice),
+      home: _Shell(
+        controller: widget.controller,
+        themeChoice: _themeChoice,
+        onTheme: _setTheme,
+        onExportCsv: widget.onExportCsv,
+      ),
     );
   }
 }
 
 class _Shell extends StatefulWidget {
-  const _Shell({required this.controller});
+  const _Shell({
+    required this.controller,
+    required this.themeChoice,
+    required this.onTheme,
+    required this.onExportCsv,
+  });
 
   final LogController controller;
+  final ThemeChoice themeChoice;
+  final ValueChanged<ThemeChoice> onTheme;
+  final Future<void> Function(String csv)? onExportCsv;
 
   @override
   State<_Shell> createState() => _ShellState();
@@ -76,16 +106,49 @@ class _ShellState extends State<_Shell> {
       appBar: AppBar(
         title: const Text('DuoFuel'),
         actions: [
-          if (controller.canWrite)
-            PopupMenuButton<String>(
-              tooltip: 'Ещё',
-              onSelected: (value) {
-                if (value == 'reset') openReset(context, controller);
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'reset', child: Text('Замена панели')),
-              ],
-            ),
+          PopupMenuButton<String>(
+            tooltip: 'Ещё',
+            onSelected: (value) {
+              if (value == 'reset' && controller.canWrite) {
+                openReset(context, controller);
+              }
+              final choice = switch (value) {
+                'theme-light' => ThemeChoice.light,
+                'theme-dark' => ThemeChoice.dark,
+                'theme-system' => ThemeChoice.system,
+                _ => null,
+              };
+              if (choice != null) widget.onTheme(choice);
+            },
+            itemBuilder: (context) => [
+              if (controller.canWrite)
+                const PopupMenuItem(
+                  value: 'reset',
+                  child: Text('Замена панели'),
+                ),
+              PopupMenuItem(
+                value: 'theme-system',
+                child: _ThemeRow(
+                  label: 'Как в системе',
+                  selected: widget.themeChoice == ThemeChoice.system,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'theme-light',
+                child: _ThemeRow(
+                  label: 'Светлая',
+                  selected: widget.themeChoice == ThemeChoice.light,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'theme-dark',
+                child: _ThemeRow(
+                  label: 'Тёмная',
+                  selected: widget.themeChoice == ThemeChoice.dark,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       body: _body(controller),
@@ -144,7 +207,24 @@ class _ShellState extends State<_Shell> {
     }
     return _index == 0
         ? HomePage(controller: controller)
-        : JournalPage(controller: controller);
+        : JournalPage(controller: controller, onExport: widget.onExportCsv);
+  }
+}
+
+class _ThemeRow extends StatelessWidget {
+  const _ThemeRow({required this.label, required this.selected});
+
+  final String label;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: Text(label)),
+        if (selected) const Icon(Icons.check, size: 20),
+      ],
+    );
   }
 }
 

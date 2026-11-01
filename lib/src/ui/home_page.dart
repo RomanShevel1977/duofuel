@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../model/records.dart';
+import 'cycle_chart.dart';
 import 'dialogs.dart';
 import 'format.dart';
 import 'log_controller.dart';
@@ -14,6 +15,7 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
+    final chart = cycleChartPoints(controller.entries, controller.resets);
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
@@ -55,6 +57,10 @@ class HomePage extends StatelessWidget {
         _FuelCard(controller: controller, fuel: FuelType.petrol),
         const SizedBox(height: 12),
         _FuelCard(controller: controller, fuel: FuelType.lpg),
+        if (chart.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          CycleChart(points: chart),
+        ],
         const SizedBox(height: 20),
         DecoratedBox(
           decoration: BoxDecoration(
