@@ -147,7 +147,7 @@ class _FuelCard extends StatelessWidget {
       label: 'Последний цикл',
       valueKey: Key('consumption-${fuel.name}-latest'),
       value: latestValue(report.latest),
-      detail: latestDetail(report.latest),
+      detail: latestDetail(report.latest, fuel: fuel),
       factual: report.latest?.ratePer100 != null,
       emphasize: true,
     );
@@ -155,7 +155,11 @@ class _FuelCard extends StatelessWidget {
       label: 'Средний расход',
       valueKey: Key('consumption-${fuel.name}-average'),
       value: averageValue(report.average),
-      detail: averageDetail(report.average),
+      detail: averageDetail(
+        report.average,
+        fuel: fuel,
+        closedCycles: report.cycles.length,
+      ),
       factual: report.average.litersPer100 != null,
     );
     final price = controller.price(fuel);
@@ -163,7 +167,11 @@ class _FuelCard extends StatelessWidget {
       label: 'Средняя цена',
       valueKey: Key('price-${fuel.name}-average'),
       value: priceValue(price),
-      detail: priceDetail(price),
+      detail: priceDetail(
+        price,
+        fuel: fuel,
+        needsTwoFullFills: report.cycles.isEmpty,
+      ),
       factual: price.hasPrice,
     );
     return Card(

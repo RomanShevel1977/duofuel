@@ -32,21 +32,6 @@ FuelType lastFuelType(List<FuelEntry> entries) {
   return latest?.fuelType ?? FuelType.petrol;
 }
 
-int? previousOdometerKm(
-  List<FuelEntry> entries,
-  FuelType fuel, {
-  String? exceptId,
-}) {
-  FuelEntry? latest;
-  for (final entry in entries) {
-    if (entry.fuelType != fuel || entry.id == exceptId) continue;
-    if (latest == null || entry.sortKey.compareTo(latest.sortKey) > 0) {
-      latest = entry;
-    }
-  }
-  return latest?.odometerKm;
-}
-
 String formatRate(double value) =>
     '${value.toStringAsFixed(1).replaceAll('.', ',')} л/100 км';
 
@@ -104,18 +89,46 @@ String formatTotalInput(int minor) {
   return '$sign$whole,${frac.toString().padLeft(2, '0')}';
 }
 
+String twoFullFillsDetail(FuelType? fuel) {
+  final name = switch (fuel) {
+    FuelType.petrol => 'бензина',
+    FuelType.lpg => 'газа',
+    null => 'этого топлива',
+  };
+  return 'Нужны две полные заправки $name.';
+}
+
+/// Цена литра в форме. Считается из введённых литров и суммы и не сохраняется.
+String? formatEnteredUnitPrice(int? totalMinor, double? liters) {
+  if (totalMinor == null ||
+      liters == null ||
+      !(liters > 0) ||
+      !liters.isFinite) {
+    return null;
+  }
+  final perLitre = totalMinor / liters / 100;
+  return '${perLitre.toStringAsFixed(2).replaceAll('.', ',')} грн/л';
+}
+
 String priceValue(PriceAverage average) {
   if (!average.hasPrice) return 'Недостаточно данных';
   final perLitre = average.totalMinor! / average.liters! / 100;
   return '${perLitre.toStringAsFixed(2).replaceAll('.', ',')} грн/л';
 }
 
-String priceDetail(PriceAverage average) {
+String priceDetail(
+  PriceAverage average, {
+  FuelType? fuel,
+  bool needsTwoFullFills = true,
+}) {
   if (average.mixedCurrency) return 'Разные валюты не складываются.';
   final money = average.totalMinor;
   final liters = average.liters;
   if (!average.hasPrice || money == null || liters == null) {
-    return 'Появится по заправкам, у которых указана сумма чека.';
+    if (!needsTwoFullFills) {
+      return 'Укажите сумму чека. Средняя цена — сумма чеков, делённая на литры.';
+    }
+    return '${twoFullFillsDetail(fuel)} Цена считается по суммам чека.';
   }
   return '${formatMoney(money)} на ${formatLiters(liters)} л · ${average.fillCount} ${fillsWord(average.fillCount)}';
 }
@@ -144,9 +157,9 @@ String latestValue(CycleResult? cycle) {
   return formatRate(rate);
 }
 
-String latestDetail(CycleResult? cycle) {
+String latestDetail(CycleResult? cycle, {FuelType? fuel}) {
   if (cycle == null) {
-    return 'Отметьте две полные заправки.';
+    return twoFullFillsDetail(fuel);
   }
   final rate = cycle.ratePer100;
   final volume = cycle.volume;
@@ -173,11 +186,18 @@ String averageValue(FuelAverage average) {
   return formatRate(rate);
 }
 
-String averageDetail(FuelAverage average) {
+String averageDetail(
+  FuelAverage average, {
+  FuelType? fuel,
+  int closedCycles = 0,
+}) {
   final volume = average.volumeLiters;
   final distance = average.distanceKm;
   if (average.litersPer100 == null || volume == null || distance == null) {
-    return 'Появится после первого закрытого цикла.';
+    if (closedCycles > 0) {
+      return 'Закрытый цикл есть, но фактический расход по нему не посчитан.';
+    }
+    return twoFullFillsDetail(fuel);
   }
   return 'Фактический · ${formatLiters(volume)} л на $distance км · ${average.cycleCount} ${cyclesWord(average.cycleCount)}';
 }
