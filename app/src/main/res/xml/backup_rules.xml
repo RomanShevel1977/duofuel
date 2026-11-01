@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- OPEN-AUTOBACKUP: база, архивы и чеки не уходят в системный backup без явного экспорта. -->
-<full-backup-content>
-    <exclude domain="database" path="." />
-    <exclude domain="file" path="receipts" />
-    <exclude domain="file" path="archives" />
-    <exclude domain="file" path="exports" />
-</full-backup-content>
