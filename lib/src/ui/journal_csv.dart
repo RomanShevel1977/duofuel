@@ -1,26 +1,46 @@
 import '../model/records.dart';
 import 'format.dart';
 
-const journalCsvHeader = 'Дата;Топливо;Литры;Сумма чека;Одометр;Полный бак';
+const journalCsvHeader =
+    'Дата;Событие;Топливо;Литры;Сумма чека;Одометр;Полный бак';
 
-/// Журнал заправок для таблицы. Расход сюда не входит: он считается отдельно.
-String journalCsv(List<FuelEntry> entries) {
-  final sorted = [...entries]..sort((a, b) => a.sortKey.compareTo(b.sortKey));
-  final lines = <String>[
+const journalCsvFilteredLine =
+    'Фильтр;в файле только строки, которые сейчас видны в журнале';
+
+/// Журнал для таблицы. Расход сюда не входит: он считается отдельно.
+String journalCsv(
+  List<FuelEntry> entries, {
+  List<OdometerReset> resets = const [],
+  bool filtered = false,
+}) {
+  final lines = <_CsvLine>[
+    for (final entry in entries)
+      _CsvLine(entry.sortKey, [
+        formatWhenMs(entry.occurredAtMs),
+        'Заправка',
+        fuelLabel(entry.fuelType),
+        formatLiters(entry.quantity),
+        entry.totalMinor == null ? '' : formatCsvMoney(entry.totalMinor!),
+        '${entry.odometerKm}',
+        entry.isFull ? 'да' : 'нет',
+      ]),
+    for (final reset in resets)
+      _CsvLine(reset.sortKey, [
+        formatWhenMs(reset.occurredAtMs),
+        'Замена панели',
+        '',
+        '',
+        '',
+        '${reset.odometerKm}',
+        '',
+      ]),
+  ]..sort((a, b) => a.key.compareTo(b.key));
+  final body = <String>[
+    if (filtered) journalCsvFilteredLine,
     journalCsvHeader,
-    for (final entry in sorted)
-      [
-        _cell(formatWhenMs(entry.occurredAtMs)),
-        _cell(fuelLabel(entry.fuelType)),
-        _cell(formatLiters(entry.quantity)),
-        _cell(
-          entry.totalMinor == null ? '' : formatCsvMoney(entry.totalMinor!),
-        ),
-        _cell('${entry.odometerKm}'),
-        _cell(entry.isFull ? 'да' : 'нет'),
-      ].join(';'),
+    for (final line in lines) line.cells.map(_cell).join(';'),
   ];
-  return '\uFEFF${lines.join('\n')}\n';
+  return '\uFEFF${body.join('\n')}\n';
 }
 
 String formatCsvMoney(int minor) {
@@ -31,9 +51,30 @@ String formatCsvMoney(int minor) {
   return '$sign$whole,$frac';
 }
 
+String journalExportMessage({
+  required bool filtered,
+  required String fileName,
+  required bool shared,
+}) {
+  final scope = filtered
+      ? 'В файле только строки, которые сейчас видны в журнале.'
+      : 'В файле весь журнал, включая замены панели.';
+  if (shared) {
+    return '$scope Сохраните «$fileName» через отправку — так файл можно найти.';
+  }
+  return '$scope Файл «$fileName» лежит в папке duofuel-export. Отправка не открылась.';
+}
+
 String _cell(String value) {
   if (value.contains(';') || value.contains('"') || value.contains('\n')) {
     return '"${value.replaceAll('"', '""')}"';
   }
   return value;
+}
+
+class _CsvLine {
+  const _CsvLine(this.key, this.cells);
+
+  final SortKey key;
+  final List<String> cells;
 }

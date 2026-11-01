@@ -55,7 +55,20 @@ class _JournalPageState extends State<JournalPage> {
   }
 
   Future<void> _export() async {
-    final csv = journalCsv(widget.controller.entries);
+    final controller = widget.controller;
+    final filter = _filter;
+    final filtered = filter.isActive;
+    final csv = journalCsv(
+      [
+        for (final entry in controller.entries)
+          if (filter.allowsEntry(entry)) entry,
+      ],
+      resets: [
+        for (final reset in controller.resets)
+          if (filter.allowsReset(reset)) reset,
+      ],
+      filtered: filtered,
+    );
     final custom = widget.onExport;
     if (custom != null) {
       await custom(csv);
@@ -63,18 +76,28 @@ class _JournalPageState extends State<JournalPage> {
     }
     try {
       final file = await saveJournalCsv(csv);
+      final name = file.uri.pathSegments.last;
       var shared = false;
       try {
-        await shareJournalFile(file);
+        await shareJournalFile(
+          file,
+          text: journalExportMessage(
+            filtered: filtered,
+            fileName: name,
+            shared: true,
+          ),
+        );
         shared = true;
       } catch (_) {}
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            shared
-                ? 'Журнал сохранён и открыт для отправки'
-                : 'Журнал сохранён на устройстве',
+            journalExportMessage(
+              filtered: filtered,
+              fileName: name,
+              shared: shared,
+            ),
           ),
         ),
       );
@@ -172,25 +195,47 @@ class _JournalTools extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextField(
-          key: const Key('journal-search'),
-          controller: search,
-          onChanged: (_) => onSearch(),
-          decoration: const InputDecoration(
-            labelText: 'Поиск',
-            hintText: 'Литры, одометр, топливо',
-            prefixIcon: Icon(Icons.search),
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: const Key('journal-search'),
+                controller: search,
+                onChanged: (_) => onSearch(),
+                style: text.bodyMedium,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  hintText: 'Поиск: литры, одометр',
+                  prefixIcon: Icon(Icons.search),
+                  prefixIconConstraints: BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 36,
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              key: const Key('journal-export'),
+              tooltip: 'Экспорт CSV',
+              onPressed: onExport,
+              icon: const Icon(Icons.ios_share),
+            ),
+          ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         SegmentedButton<JournalFuelFilter>(
           key: const Key('journal-fuel'),
           style: const ButtonStyle(
-            minimumSize: WidgetStatePropertyAll(Size(48, 48)),
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            minimumSize: WidgetStatePropertyAll(Size(36, 36)),
           ),
           segments: const [
             ButtonSegment(value: JournalFuelFilter.all, label: Text('Все')),
@@ -208,39 +253,32 @@ class _JournalTools extends StatelessWidget {
           selected: {fuel},
           onSelectionChanged: (selected) => onFuel(selected.first),
         ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton.icon(
                 key: const Key('journal-day'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: const Size(0, 36),
+                ),
                 onPressed: onPickDay,
-                icon: const Icon(Icons.calendar_today_outlined),
+                icon: const Icon(Icons.calendar_today_outlined, size: 18),
                 label: Text(day == null ? 'Все дни' : dayHeading(day!)),
               ),
-            ),
-            if (day != null) ...[
-              const SizedBox(width: 8),
-              IconButton(
-                key: const Key('journal-day-clear'),
-                tooltip: 'Сбросить день',
-                onPressed: onClearDay,
-                icon: const Icon(Icons.close),
-              ),
+              if (day != null)
+                IconButton(
+                  key: const Key('journal-day-clear'),
+                  tooltip: 'Сбросить день',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onClearDay,
+                  icon: const Icon(Icons.close),
+                ),
             ],
-          ],
-        ),
-        const SizedBox(height: 12),
-        FilledButton.icon(
-          key: const Key('journal-export'),
-          onPressed: onExport,
-          icon: const Icon(Icons.ios_share),
-          label: const Text('Экспорт CSV'),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Файл сохраняется на устройстве, его можно отправить.',
-          style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          ),
         ),
       ],
     );

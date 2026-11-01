@@ -42,6 +42,79 @@ List<CycleChartPoint> cycleChartPoints(
   return points;
 }
 
+/// Верх шкалы. Ноль всегда внизу, чтобы небольшой разброс не занимал весь график.
+double chartYMax(Iterable<double> rates) {
+  var maxRate = 0.0;
+  for (final rate in rates) {
+    if (rate.isFinite && rate > maxRate) maxRate = rate;
+  }
+  if (maxRate <= 0) return 1;
+  return maxRate * 1.25;
+}
+
+String formatChartDate(int milliseconds) {
+  final date = DateTime.fromMillisecondsSinceEpoch(milliseconds);
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(date.day)}.${two(date.month)}.${date.year}';
+}
+
+String formatChartRate(double value) =>
+    value.toStringAsFixed(1).replaceAll('.', ',');
+
+/// Подписи, которые не пересекаются. Первая и последняя остаются, даже если тесно.
+List<int> axisLabelsThatFit(
+  List<double> centers,
+  List<double> widths, {
+  double gap = 8,
+  double minLeft = 0,
+  double maxRight = double.infinity,
+}) {
+  if (centers.isEmpty) return const [];
+  bool fits(int index, List<int> chosen) {
+    final left = math.max(minLeft, centers[index] - widths[index] / 2);
+    final right = math.min(maxRight, centers[index] + widths[index] / 2);
+    if (right - left < 4) return false;
+    for (final other in chosen) {
+      final otherLeft = centers[other] - widths[other] / 2;
+      final otherRight = centers[other] + widths[other] / 2;
+      if (left < otherRight + gap && right > otherLeft - gap) return false;
+    }
+    return true;
+  }
+
+  if (centers.length == 1) return fits(0, const []) ? const [0] : const [];
+  final chosen = <int>[];
+  if (fits(0, chosen)) chosen.add(0);
+  final last = centers.length - 1;
+  if (fits(last, chosen)) chosen.add(last);
+  for (var index = 1; index < last; index++) {
+    if (fits(index, chosen)) chosen.add(index);
+  }
+  chosen.sort();
+  return chosen;
+}
+
+String cycleChartSemantics(List<CycleChartPoint> points) {
+  final lines = <String>[
+    'График расхода закрытых циклов, шкала от нуля, л/100 км.',
+    for (final point in points)
+      '${fuelLabel(point.fuel)}, ${formatChartDate(point.endMs)}, ${formatRate(point.ratePer100)}',
+  ];
+  return lines.join(' ');
+}
+
+List<String> chartAxisDates(List<CycleChartPoint> points) {
+  if (points.isEmpty) return const [];
+  final first = formatChartDate(points.first.endMs);
+  final last = formatChartDate(points.last.endMs);
+  if (points.length < 3 || first == last) {
+    return first == last ? [first] : [first, last];
+  }
+  final middle = formatChartDate(points[points.length ~/ 2].endMs);
+  if (middle == first || middle == last) return [first, last];
+  return [first, middle, last];
+}
+
 class CycleChart extends StatelessWidget {
   const CycleChart({super.key, required this.points});
 
@@ -53,53 +126,82 @@ class CycleChart extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final petrol = points.any((point) => point.fuel == FuelType.petrol);
     final lpg = points.any((point) => point.fuel == FuelType.lpg);
-    return Card(
-      key: const Key('cycle-chart'),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Расход по циклам', style: text.titleLarge),
-            const SizedBox(height: 4),
-            Text(
-              'Точки — фактический расход закрытых циклов.',
-              style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 180,
-              width: double.infinity,
-              child: CustomPaint(
-                painter: _CycleChartPainter(
-                  points: points,
-                  petrol: scheme.primary,
-                  lpg: scheme.tertiary,
-                  axis: scheme.outlineVariant,
-                  label: text.labelSmall?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 16,
-              runSpacing: 8,
+    final dates = chartAxisDates(points);
+    return Semantics(
+      container: true,
+      label: cycleChartSemantics(points),
+      child: ExcludeSemantics(
+        child: Card(
+          key: const Key('cycle-chart'),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (petrol)
-                  _Legend(
-                    key: const Key('cycle-series-petrol'),
-                    color: scheme.primary,
-                    label: 'Бензин',
+                Text('Расход по циклам', style: text.titleMedium),
+                Text(
+                  'Даты закрытия, шкала от нуля, л/100 км.',
+                  style: text.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
                   ),
-                if (lpg)
-                  _Legend(
-                    key: const Key('cycle-series-lpg'),
-                    color: scheme.tertiary,
-                    label: 'Газ',
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 140,
+                  width: double.infinity,
+                  child: CustomPaint(
+                    painter: _CycleChartPainter(
+                      points: points,
+                      petrol: scheme.primary,
+                      lpg: scheme.tertiary,
+                      axis: scheme.outline,
+                      label: text.labelSmall,
+                    ),
                   ),
+                ),
+                Row(
+                  children: [
+                    for (var index = 0; index < dates.length; index++)
+                      Expanded(
+                        child: Text(
+                          dates[index],
+                          key: index == 0 ? const Key('cycle-axis-date') : null,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: dates.length == 1
+                              ? TextAlign.center
+                              : index == 0
+                              ? TextAlign.left
+                              : index == dates.length - 1
+                              ? TextAlign.right
+                              : TextAlign.center,
+                          style: text.labelMedium,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 4,
+                  children: [
+                    if (petrol)
+                      _Legend(
+                        key: const Key('cycle-series-petrol'),
+                        color: scheme.primary,
+                        label: 'Бензин',
+                      ),
+                    if (lpg)
+                      _Legend(
+                        key: const Key('cycle-series-lpg'),
+                        color: scheme.tertiary,
+                        label: 'Газ',
+                      ),
+                  ],
+                ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -147,26 +249,30 @@ class _CycleChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (points.isEmpty) return;
-    final plot = Rect.fromLTWH(8, 20, size.width - 16, size.height - 28);
-    canvas.drawRect(
-      plot,
+    final plot = Rect.fromLTWH(28, 8, size.width - 36, size.height - 12);
+    final yMax = chartYMax(points.map((point) => point.ratePer100));
+    canvas.drawLine(
+      plot.bottomLeft,
+      plot.bottomRight,
       Paint()
         ..color = axis
-        ..style = PaintingStyle.stroke,
+        ..strokeWidth = 1,
     );
-    var minRate = points.first.ratePer100;
-    var maxRate = points.first.ratePer100;
+    canvas.drawLine(
+      plot.bottomLeft,
+      plot.topLeft,
+      Paint()
+        ..color = axis
+        ..strokeWidth = 1,
+    );
+    _tick(canvas, plot, '0', plot.bottom);
+    _tick(canvas, plot, formatChartRate(yMax), plot.top);
+
     var minTime = points.first.endMs;
     var maxTime = points.first.endMs;
     for (final point in points) {
-      minRate = math.min(minRate, point.ratePer100);
-      maxRate = math.max(maxRate, point.ratePer100);
       minTime = math.min(minTime, point.endMs);
       maxTime = math.max(maxTime, point.endMs);
-    }
-    if ((maxRate - minRate).abs() < 1e-9) {
-      minRate -= 1;
-      maxRate += 1;
     }
     Offset place(CycleChartPoint point, int index) {
       final double x;
@@ -177,19 +283,16 @@ class _CycleChartPainter extends CustomPainter {
             plot.left +
             plot.width * ((point.endMs - minTime) / (maxTime - minTime));
       }
-      final y =
-          plot.bottom -
-          plot.height * ((point.ratePer100 - minRate) / (maxRate - minRate));
+      final y = plot.bottom - plot.height * (point.ratePer100 / yMax);
       return Offset(x, y);
     }
 
     void series(FuelType fuel, Color color) {
-      final spots = <Offset>[];
+      final indexed = <int>[];
       for (var index = 0; index < points.length; index++) {
-        final point = points[index];
-        if (point.fuel != fuel) continue;
-        spots.add(place(point, index));
+        if (points[index].fuel == fuel) indexed.add(index);
       }
+      final spots = [for (final index in indexed) place(points[index], index)];
       if (spots.length >= 2) {
         final path = Path()..moveTo(spots.first.dx, spots.first.dy);
         for (final spot in spots.skip(1)) {
@@ -204,25 +307,51 @@ class _CycleChartPainter extends CustomPainter {
             ..strokeCap = StrokeCap.round,
         );
       }
-      var spotIndex = 0;
-      for (var index = 0; index < points.length; index++) {
-        final point = points[index];
-        if (point.fuel != fuel) continue;
-        final spot = spots[spotIndex++];
-        canvas.drawCircle(spot, 5, Paint()..color = color);
+      final texts = <TextPainter>[];
+      final centers = <double>[];
+      final widths = <double>[];
+      for (final spot in spots) {
         final painter = TextPainter(
-          text: TextSpan(text: formatRate(point.ratePer100), style: label),
+          text: TextSpan(
+            text: formatChartRate(points[indexed[texts.length]].ratePer100),
+            style: label?.copyWith(color: color),
+          ),
           textDirection: TextDirection.ltr,
-        )..layout(maxWidth: plot.width);
+          maxLines: 1,
+        )..layout();
+        texts.add(painter);
+        centers.add(spot.dx);
+        widths.add(painter.width);
+      }
+      final visible = axisLabelsThatFit(
+        centers,
+        widths,
+        minLeft: plot.left,
+        maxRight: plot.right,
+      ).toSet();
+      for (var index = 0; index < spots.length; index++) {
+        final spot = spots[index];
+        canvas.drawCircle(spot, 5, Paint()..color = color);
+        if (!visible.contains(index)) continue;
+        final painter = texts[index];
         final dx = (spot.dx - painter.width / 2)
             .clamp(plot.left, plot.right - painter.width)
             .toDouble();
-        painter.paint(canvas, Offset(dx, spot.dy - painter.height - 8));
+        painter.paint(canvas, Offset(dx, spot.dy - painter.height - 4));
       }
     }
 
     series(FuelType.petrol, petrol);
     series(FuelType.lpg, lpg);
+  }
+
+  void _tick(Canvas canvas, Rect plot, String text, double y) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: label),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: 32);
+    painter.paint(canvas, Offset(0, y - painter.height / 2));
   }
 
   @override

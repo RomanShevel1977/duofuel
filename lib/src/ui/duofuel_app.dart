@@ -205,9 +205,13 @@ class _ShellState extends State<_Shell> {
         ),
       );
     }
-    return _index == 0
-        ? HomePage(controller: controller)
-        : JournalPage(controller: controller, onExport: widget.onExportCsv);
+    return IndexedStack(
+      index: _index,
+      children: [
+        HomePage(controller: controller),
+        JournalPage(controller: controller, onExport: widget.onExportCsv),
+      ],
+    );
   }
 }
 
