@@ -89,21 +89,34 @@ class _ShellState extends State<_Shell> {
         ],
       ),
       body: _body(controller),
-      floatingActionButton: controller.canWrite
-          ? FloatingActionButton.extended(
-              key: const Key('fab-fuel'),
-              onPressed: () => openFuel(context, controller),
-              icon: const Icon(Icons.local_gas_station),
-              label: const Text('Заправка'),
-            )
-          : null,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.speed), label: 'Сводка'),
-          NavigationDestination(icon: Icon(Icons.list_alt), label: 'Журнал'),
-        ],
+      bottomNavigationBar: Material(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (controller.canWrite)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: FilledButton.icon(
+                  key: const Key('fab-fuel'),
+                  onPressed: () => openFuel(context, controller),
+                  icon: const Icon(Icons.local_gas_station),
+                  label: const Text('Заправка'),
+                ),
+              ),
+            NavigationBar(
+              selectedIndex: _index,
+              onDestinationSelected: (value) => setState(() => _index = value),
+              destinations: const [
+                NavigationDestination(icon: Icon(Icons.speed), label: 'Сводка'),
+                NavigationDestination(
+                  icon: Icon(Icons.list_alt),
+                  label: 'Журнал',
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -155,9 +168,13 @@ ThemeData _theme(Brightness brightness) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        minimumSize: const Size.fromHeight(48),
+        minimumSize: const Size.fromHeight(56),
+        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         shape: buttonShape,
       ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(

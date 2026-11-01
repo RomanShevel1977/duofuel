@@ -15,7 +15,7 @@ class HomePage extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 128),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
         Row(
           children: [
@@ -101,7 +101,7 @@ class _StartHint extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Нажмите «Заправка» внизу и отметьте полный бак. Расход появится после двух полных заправок и не подменяется нулём.',
+                    'Кнопка «Заправка» внизу. Нужны две полные заправки, и расход не подменяется нулём.',
                     style: text.bodyMedium?.copyWith(
                       color: scheme.onPrimaryContainer,
                     ),
@@ -180,27 +180,17 @@ class _FuelCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth < 520) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [latest, const SizedBox(height: 16), average],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: latest),
-                    const SizedBox(width: 16),
-                    Expanded(child: average),
-                  ],
-                );
-              },
+            const SizedBox(height: 12),
+            latest,
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: average),
+                const SizedBox(width: 12),
+                Expanded(child: priceReadout),
+              ],
             ),
-            const SizedBox(height: 16),
-            priceReadout,
             if (report.unclosed != null) ...[
               const SizedBox(height: 12),
               DecoratedBox(
