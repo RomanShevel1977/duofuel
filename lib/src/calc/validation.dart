@@ -10,6 +10,11 @@ class FieldIssue {
 const quantityField = 'Количество';
 const odometerField = 'Одометр, км';
 const nameField = 'Имя';
+const totalField = 'Сумма чека';
+
+/// Гривна, две копейки. Так прежнее приложение хранило сумму чека.
+const uahCurrency = 'UAH';
+const uahFractionDigits = 2;
 
 List<FieldIssue> validateQuantity(String text) {
   final trimmed = text.trim();
@@ -61,6 +66,34 @@ int? parseOdometer(String text) {
   return int.parse(_compact(text));
 }
 
+/// Пустая сумма допустима: заправка без чека не становится нулевой оплатой.
+List<FieldIssue> validateTotal(String text) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) return const [];
+  final compact = _compact(trimmed).replaceAll(',', '.');
+  if (compact.startsWith('-')) {
+    return const [
+      FieldIssue(totalField, 'отрицательное значение не принимается'),
+    ];
+  }
+  final parsed = _minorUnits(compact);
+  if (parsed == null) {
+    return const [FieldIssue(totalField, 'не число')];
+  }
+  if (parsed < 0) {
+    return const [FieldIssue(totalField, 'лишние знаки после запятой')];
+  }
+  return const [];
+}
+
+int? parseTotalMinor(String text) {
+  if (validateTotal(text).isNotEmpty) return null;
+  if (text.trim().isEmpty) return null;
+  final minor = _minorUnits(_compact(text).replaceAll(',', '.'));
+  if (minor == null || minor < 0) return null;
+  return minor;
+}
+
 List<FieldIssue> validateName(String text) {
   if (text.trim().isEmpty) {
     return const [FieldIssue(nameField, 'нужно заполнить')];
@@ -70,3 +103,18 @@ List<FieldIssue> validateName(String text) {
 
 String _compact(String text) =>
     text.trim().replaceAll(' ', '').replaceAll('\u00a0', '');
+
+/// Копейки. Лишние знаки после отбрасывания конечных нулей — сигнал -1, не округление.
+int? _minorUnits(String compact) {
+  if (compact.isEmpty || compact.startsWith('+')) return null;
+  final parts = compact.split('.');
+  if (parts.length > 2) return null;
+  final whole = parts[0].isEmpty ? '0' : parts[0];
+  if (!RegExp(r'^\d+$').hasMatch(whole)) return null;
+  var frac = parts.length == 2 ? parts[1] : '';
+  if (frac.isNotEmpty && !RegExp(r'^\d+$').hasMatch(frac)) return null;
+  frac = frac.replaceFirst(RegExp(r'0+$'), '');
+  if (frac.length > uahFractionDigits) return -1;
+  final padded = frac.padRight(uahFractionDigits, '0');
+  return int.parse(whole) * 100 + int.parse(padded);
+}

@@ -63,6 +63,10 @@ void main() {
       FuelType.lpg,
     );
     expect(loaded.resets.single.odometerKm, 10);
+    expect(
+      loaded.entries.singleWhere((entry) => entry.id == 'open').totalMinor,
+      isNull,
+    );
     final again = cycles(loaded.entries, loaded.resets, FuelType.petrol);
     expect(again, isEmpty);
   });
@@ -135,4 +139,43 @@ void main() {
     expect(controller.consumption(FuelType.lpg).latest, isNull);
     expect(controller.consumption(FuelType.lpg).average.litersPer100, isNull);
   });
+
+  test(
+    'a receipt total round-trips and a bad total is not read as zero',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('duofuel-price');
+      addTearDown(() => directory.delete(recursive: true));
+      final file = File('${directory.path}/fuel_log.json');
+      final log = FileFuelLog(file);
+      await log.write(
+        FuelSnapshot(
+          vehicleName: 'Ланос',
+          entries: [
+            const FuelEntry(
+              id: 'paid',
+              fuelType: FuelType.petrol,
+              occurredAtMs: 1,
+              odometerKm: 10,
+              quantity: 40,
+              unit: 'L',
+              isFull: true,
+              createdAtMs: 1,
+              totalMinor: 220000,
+              currency: 'UAH',
+            ),
+          ],
+          resets: const [],
+        ),
+      );
+      final loaded = await log.read();
+      expect(loaded.entries.single.totalMinor, 220000);
+      expect(loaded.entries.single.currency, 'UAH');
+
+      await file.writeAsString(
+        file.readAsStringSync().replaceAll('220000', '-5'),
+      );
+      await expectLater(log.read(), throwsA(isA<FuelLogReadException>()));
+      expect(file.readAsStringSync().contains('-5'), isTrue);
+    },
+  );
 }

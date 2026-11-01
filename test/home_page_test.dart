@@ -14,6 +14,8 @@ void main() {
     expect(_text(tester, 'consumption-petrol-average'), 'Недостаточно данных');
     expect(_text(tester, 'consumption-lpg-latest'), 'Недостаточно данных');
     expect(_text(tester, 'consumption-lpg-average'), 'Недостаточно данных');
+    expect(_text(tester, 'price-petrol-average'), 'Недостаточно данных');
+    expect(_text(tester, 'price-lpg-average'), 'Недостаточно данных');
     expect(find.textContaining('0,0'), findsNothing);
     expect(find.textContaining('0 л/100'), findsNothing);
     expect(find.text('CNG'), findsNothing);
@@ -37,6 +39,28 @@ void main() {
     expect(_text(tester, 'consumption-lpg-latest'), 'Недостаточно данных');
     expect(_text(tester, 'consumption-lpg-average'), 'Недостаточно данных');
     expect(find.textContaining('Бензин: незакрытый цикл'), findsNothing);
+    expect(_text(tester, 'price-petrol-average'), 'Недостаточно данных');
+  });
+
+  testWidgets('average price is per litre and skips a fill without a sum', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await _saveFill(tester, quantity: '40', odometer: '1000', total: '2200');
+    await _saveFill(tester, quantity: '20', odometer: '1100', total: '1100');
+    await _saveFill(tester, quantity: '10', odometer: '1200');
+    await _saveFill(
+      tester,
+      quantity: '8',
+      odometer: '1300',
+      total: '240',
+      fuelLpg: true,
+    );
+
+    expect(_text(tester, 'price-petrol-average'), '55,00 грн/л');
+    expect(find.text('3300,00 грн на 60 л · 2 заправки'), findsOneWidget);
+    expect(_text(tester, 'price-lpg-average'), '30,00 грн/л');
+    expect(_text(tester, 'consumption-petrol-latest'), 'Недостаточно данных');
   });
 
   testWidgets('empty quantity and zero quantity name the field', (
@@ -108,12 +132,21 @@ Future<void> _saveFill(
   WidgetTester tester, {
   required String quantity,
   required String odometer,
-  required bool full,
+  bool full = false,
+  String? total,
+  bool fuelLpg = false,
 }) async {
   await tester.tap(find.byKey(const Key('fab-fuel')));
   await tester.pumpAndSettle();
+  if (fuelLpg) {
+    await tester.tap(find.byTooltip('LPG'));
+    await tester.pump();
+  }
   await tester.enterText(find.byKey(const Key('quantity')), quantity);
   await tester.enterText(find.byKey(const Key('odometer')), odometer);
+  if (total != null) {
+    await tester.enterText(find.byKey(const Key('total')), total);
+  }
   if (full) {
     await tester.tap(find.byKey(const Key('full-tank')));
     await tester.pump();
