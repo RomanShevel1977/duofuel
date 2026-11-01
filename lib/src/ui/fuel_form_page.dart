@@ -179,6 +179,10 @@ class _FuelFormPageState extends State<FuelFormPage> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
           SegmentedButton<FuelType>(
+            style: const ButtonStyle(
+              minimumSize: WidgetStatePropertyAll(Size(48, 56)),
+              visualDensity: VisualDensity.comfortable,
+            ),
             segments: const [
               ButtonSegment(
                 value: FuelType.petrol,
@@ -222,28 +226,48 @@ class _FuelFormPageState extends State<FuelFormPage> {
             ),
           ),
           const SizedBox(height: 16),
-          TextField(
-            key: const Key('quantity'),
-            controller: _quantity,
-            decoration: InputDecoration(
-              labelText: 'Количество',
-              suffixText: 'л',
-              helperText: 'Литры, можно с запятой',
-              errorText: _issueFor(quantityField),
-            ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            key: const Key('total'),
-            controller: _total,
-            decoration: InputDecoration(
-              labelText: 'Сумма чека',
-              suffixText: 'грн',
-              helperText: _totalHelp(),
-              errorText: _issueFor(totalField),
-            ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final quantity = TextField(
+                key: const Key('quantity'),
+                controller: _quantity,
+                decoration: InputDecoration(
+                  labelText: 'Количество',
+                  suffixText: 'л',
+                  helperText: 'Литры, можно с запятой',
+                  errorText: _issueFor(quantityField),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              );
+              final total = TextField(
+                key: const Key('total'),
+                controller: _total,
+                decoration: InputDecoration(
+                  labelText: 'Сумма чека',
+                  suffixText: 'грн',
+                  helperText: _totalHelp(),
+                  errorText: _issueFor(totalField),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              );
+              if (constraints.maxWidth < 420) {
+                return Column(
+                  children: [quantity, const SizedBox(height: 12), total],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: quantity),
+                  const SizedBox(width: 12),
+                  Expanded(child: total),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 12),
           TextField(

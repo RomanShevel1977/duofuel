@@ -195,8 +195,3 @@ String cycleLine(CycleResult cycle) {
 
 String unclosedLine(FuelType fuel) =>
     '${fuelLabel(fuel)}: незакрытый цикл не показан как фактический расход.';
-
-String entryTitle(FuelEntry entry) {
-  final fill = entry.isFull ? 'полный бак' : 'частичная';
-  return '${fuelLabel(entry.fuelType)} · ${formatLiters(entry.quantity)} л · $fill';
-}

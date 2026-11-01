@@ -32,7 +32,7 @@ class JournalPage extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 128),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         for (final group in groups) ...[
           Padding(
@@ -114,14 +114,17 @@ class _JournalTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final entry = row.entry;
     final reset = row.reset;
+    final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
-    final title = entry != null ? entryTitle(entry) : 'Замена панели';
     final when = DateTime.fromMillisecondsSinceEpoch(row.millis);
     final odometer = entry?.odometerKm ?? reset!.odometerKm;
-    final gas = entry?.fuelType == FuelType.lpg;
     final paid = entry?.totalMinor;
-    final subtitle =
-        '${gas ? 'LPG · ' : ''}${formatClock(when)} · $odometer км${paid == null ? '' : ' · ${formatMoney(paid)}'}';
+    final title = entry == null
+        ? 'Замена панели'
+        : '${formatLiters(entry.quantity)} л';
+    final subtitle = entry == null
+        ? '${formatClock(when)} · $odometer км'
+        : '${fuelLabel(entry.fuelType)}${entry.fuelType == FuelType.lpg ? ' · LPG' : ''} · ${entry.isFull ? 'полный бак' : 'частичная'} · ${formatClock(when)} · $odometer км${paid == null ? '' : ' · ${formatMoney(paid)}'}';
     final avatarColor = entry == null
         ? scheme.tertiaryContainer
         : entry.isFull
@@ -139,7 +142,8 @@ class _JournalTile extends StatelessWidget {
           foregroundColor: avatarInk,
           child: Text(entry == null ? 'П' : fuelMark(entry.fuelType)),
         ),
-        title: Text(title),
+        minTileHeight: 72,
+        title: Text(title, style: entry == null ? null : text.titleLarge),
         subtitle: Text(subtitle),
         onTap: () {
           if (entry != null) {
@@ -151,6 +155,7 @@ class _JournalTile extends StatelessWidget {
         trailing: IconButton(
           tooltip: 'Удалить',
           color: scheme.error,
+          style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
           onPressed: () async {
             final accepted = await confirmDelete(context);
             if (!accepted) return;
