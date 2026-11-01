@@ -161,6 +161,7 @@ class _FuelFormPageState extends State<FuelFormPage> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.existing == null ? 'Заправка' : 'Изменить заправку'),
@@ -178,6 +179,8 @@ class _FuelFormPageState extends State<FuelFormPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
+          Text('Топливо', style: text.titleSmall),
+          const SizedBox(height: 8),
           SegmentedButton<FuelType>(
             style: const ButtonStyle(
               minimumSize: WidgetStatePropertyAll(Size(48, 56)),
@@ -202,6 +205,8 @@ class _FuelFormPageState extends State<FuelFormPage> {
                 setState(() => _fuel = selected.first),
           ),
           const SizedBox(height: 16),
+          Text('Чтобы посчитать расход', style: text.titleSmall),
+          const SizedBox(height: 8),
           Material(
             color: _full
                 ? scheme.primaryContainer
@@ -214,6 +219,10 @@ class _FuelFormPageState extends State<FuelFormPage> {
             ),
             child: SwitchListTile(
               key: const Key('full-tank'),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -226,48 +235,30 @@ class _FuelFormPageState extends State<FuelFormPage> {
             ),
           ),
           const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final quantity = TextField(
-                key: const Key('quantity'),
-                controller: _quantity,
-                decoration: InputDecoration(
-                  labelText: 'Количество',
-                  suffixText: 'л',
-                  helperText: 'Литры, можно с запятой',
-                  errorText: _issueFor(quantityField),
-                ),
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-              );
-              final total = TextField(
-                key: const Key('total'),
-                controller: _total,
-                decoration: InputDecoration(
-                  labelText: 'Сумма чека',
-                  suffixText: 'грн',
-                  helperText: _totalHelp(),
-                  errorText: _issueFor(totalField),
-                ),
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-              );
-              if (constraints.maxWidth < 420) {
-                return Column(
-                  children: [quantity, const SizedBox(height: 12), total],
-                );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: quantity),
-                  const SizedBox(width: 12),
-                  Expanded(child: total),
-                ],
-              );
-            },
+          Text('Запись', style: text.titleSmall),
+          const SizedBox(height: 8),
+          TextField(
+            key: const Key('quantity'),
+            controller: _quantity,
+            decoration: InputDecoration(
+              labelText: 'Количество',
+              suffixText: 'л',
+              helperText: 'Литры, можно с запятой',
+              errorText: _issueFor(quantityField),
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            key: const Key('total'),
+            controller: _total,
+            decoration: InputDecoration(
+              labelText: 'Сумма чека',
+              suffixText: 'грн',
+              helperText: _totalHelp(),
+              errorText: _issueFor(totalField),
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
           const SizedBox(height: 12),
           TextField(

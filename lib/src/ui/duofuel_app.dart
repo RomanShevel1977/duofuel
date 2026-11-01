@@ -108,9 +108,14 @@ class _ShellState extends State<_Shell> {
               selectedIndex: _index,
               onDestinationSelected: (value) => setState(() => _index = value),
               destinations: const [
-                NavigationDestination(icon: Icon(Icons.speed), label: 'Сводка'),
                 NavigationDestination(
-                  icon: Icon(Icons.list_alt),
+                  icon: Icon(Icons.speed_outlined),
+                  selectedIcon: Icon(Icons.speed),
+                  label: 'Сводка',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.list_alt_outlined),
+                  selectedIcon: Icon(Icons.list_alt),
                   label: 'Журнал',
                 ),
               ],
@@ -157,6 +162,7 @@ ThemeData _theme(Brightness brightness) {
     inputDecorationTheme: const InputDecorationTheme(
       filled: true,
       border: OutlineInputBorder(),
+      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
     ),
     cardTheme: CardThemeData(
       elevation: 0,

@@ -39,11 +39,11 @@ class HomePage extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
+            TextButton.icon(
               key: const Key('rename-vehicle'),
-              tooltip: 'Имя автомобиля',
               onPressed: () => renameVehicle(context, controller),
               icon: const Icon(Icons.edit_outlined),
+              label: const Text('Имя'),
             ),
           ],
         ),
@@ -56,11 +56,27 @@ class HomePage extends StatelessWidget {
         const SizedBox(height: 12),
         _FuelCard(controller: controller, fuel: FuelType.lpg),
         const SizedBox(height: 20),
-        Text('Как считается', style: text.titleSmall),
-        const SizedBox(height: 4),
-        Text(
-          formulaFootnote,
-          style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Как считается', style: text.titleSmall),
+                const SizedBox(height: 4),
+                Text(
+                  formulaFootnote,
+                  style: text.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
@@ -101,7 +117,7 @@ class _StartHint extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Кнопка «Заправка» внизу. Нужны две полные заправки, и расход не подменяется нулём.',
+                    'Внизу «Заправка»: литры, одометр и полный бак. Расход не подменяется нулём.',
                     style: text.bodyMedium?.copyWith(
                       color: scheme.onPrimaryContainer,
                     ),
@@ -133,6 +149,7 @@ class _FuelCard extends StatelessWidget {
       value: latestValue(report.latest),
       detail: latestDetail(report.latest),
       factual: report.latest?.ratePer100 != null,
+      emphasize: true,
     );
     final average = _Readout(
       label: 'Средний расход',
@@ -182,15 +199,10 @@ class _FuelCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             latest,
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: average),
-                const SizedBox(width: 12),
-                Expanded(child: priceReadout),
-              ],
-            ),
+            const SizedBox(height: 8),
+            average,
+            const SizedBox(height: 8),
+            priceReadout,
             if (report.unclosed != null) ...[
               const SizedBox(height: 12),
               DecoratedBox(
@@ -244,6 +256,7 @@ class _Readout extends StatelessWidget {
     required this.value,
     required this.detail,
     required this.factual,
+    this.emphasize = false,
   });
 
   final String label;
@@ -251,30 +264,51 @@ class _Readout extends StatelessWidget {
   final String value;
   final String detail;
   final bool factual;
+  final bool emphasize;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: text.titleSmall),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          key: valueKey,
-          style: (factual ? text.headlineMedium : text.titleMedium)?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: factual ? scheme.primary : scheme.onSurfaceVariant,
-          ),
+    final valueStyle = factual
+        ? (emphasize ? text.headlineMedium : text.titleLarge)
+        : text.titleMedium;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: factual
+            ? scheme.primaryContainer
+            : scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: text.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              key: valueKey,
+              style: valueStyle?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: factual
+                    ? scheme.onPrimaryContainer
+                    : scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              detail,
+              style: text.bodySmall?.copyWith(
+                color: factual
+                    ? scheme.onPrimaryContainer
+                    : scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          detail,
-          style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-        ),
-      ],
+      ),
     );
   }
 }

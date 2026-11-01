@@ -122,9 +122,10 @@ class _JournalTile extends StatelessWidget {
     final title = entry == null
         ? 'Замена панели'
         : '${formatLiters(entry.quantity)} л';
-    final subtitle = entry == null
-        ? '${formatClock(when)} · $odometer км'
-        : '${fuelLabel(entry.fuelType)}${entry.fuelType == FuelType.lpg ? ' · LPG' : ''} · ${entry.isFull ? 'полный бак' : 'частичная'} · ${formatClock(when)} · $odometer км${paid == null ? '' : ' · ${formatMoney(paid)}'}';
+    final kind = entry == null
+        ? null
+        : '${fuelLabel(entry.fuelType)}${entry.fuelType == FuelType.lpg ? ' · LPG' : ''} · ${entry.isFull ? 'полный бак' : 'частичная'}';
+    final whenLine = '${formatClock(when)} · $odometer км';
     final avatarColor = entry == null
         ? scheme.tertiaryContainer
         : entry.isFull
@@ -136,15 +137,7 @@ class _JournalTile extends StatelessWidget {
         ? scheme.onPrimaryContainer
         : scheme.onSurface;
     return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: avatarColor,
-          foregroundColor: avatarInk,
-          child: Text(entry == null ? 'П' : fuelMark(entry.fuelType)),
-        ),
-        minTileHeight: 72,
-        title: Text(title, style: entry == null ? null : text.titleLarge),
-        subtitle: Text(subtitle),
+      child: InkWell(
         onTap: () {
           if (entry != null) {
             openFuel(context, controller, existing: entry);
@@ -152,20 +145,59 @@ class _JournalTile extends StatelessWidget {
             openReset(context, controller, existing: reset);
           }
         },
-        trailing: IconButton(
-          tooltip: 'Удалить',
-          color: scheme.error,
-          style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
-          onPressed: () async {
-            final accepted = await confirmDelete(context);
-            if (!accepted) return;
-            if (entry != null) {
-              await controller.deleteEntry(entry.id);
-            } else if (reset != null) {
-              await controller.deleteReset(reset.id);
-            }
-          },
-          icon: const Icon(Icons.delete_outline),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: avatarColor,
+                foregroundColor: avatarInk,
+                child: Text(entry == null ? 'П' : fuelMark(entry.fuelType)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: text.titleLarge),
+                    if (kind != null)
+                      Text(kind, style: text.bodyMedium)
+                    else
+                      Text(whenLine, style: text.bodyMedium),
+                    if (kind != null)
+                      Text(
+                        whenLine,
+                        style: text.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    if (paid != null)
+                      Text(
+                        formatMoney(paid),
+                        style: text.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Удалить',
+                color: scheme.error,
+                style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+                onPressed: () async {
+                  final accepted = await confirmDelete(context);
+                  if (!accepted) return;
+                  if (entry != null) {
+                    await controller.deleteEntry(entry.id);
+                  } else if (reset != null) {
+                    await controller.deleteReset(reset.id);
+                  }
+                },
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
+          ),
         ),
       ),
     );
