@@ -53,14 +53,14 @@ class HomePage extends StatelessWidget {
           const SizedBox(height: 16),
           const _StartHint(),
         ],
-        const SizedBox(height: 16),
-        _FuelCard(controller: controller, fuel: FuelType.petrol),
-        const SizedBox(height: 12),
-        _FuelCard(controller: controller, fuel: FuelType.lpg),
         if (chart.isNotEmpty) ...[
           const SizedBox(height: 12),
           CycleChart(points: chart),
         ],
+        const SizedBox(height: 16),
+        _FuelCard(controller: controller, fuel: FuelType.petrol),
+        const SizedBox(height: 12),
+        _FuelCard(controller: controller, fuel: FuelType.lpg),
         const SizedBox(height: 20),
         DecoratedBox(
           decoration: BoxDecoration(

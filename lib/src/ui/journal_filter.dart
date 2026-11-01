@@ -12,6 +12,8 @@ class JournalFilter {
   final FuelType? fuel;
   final DateTime? day;
 
+  bool get isActive => text.trim().isNotEmpty || fuel != null || day != null;
+
   bool allowsEntry(FuelEntry entry) {
     if (fuel != null && entry.fuelType != fuel) return false;
     if (!_onDay(entry.occurredAtMs)) return false;

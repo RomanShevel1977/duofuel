@@ -6,6 +6,7 @@ import 'package:duofuel/src/ui/duofuel_app.dart';
 import 'package:duofuel/src/ui/journal_csv.dart';
 import 'package:duofuel/src/ui/journal_filter.dart';
 import 'package:duofuel/src/ui/log_controller.dart';
+import 'package:duofuel/src/ui/share_journal.dart';
 import 'package:duofuel/src/ui/theme_choice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,19 +15,45 @@ void main() {
   test(
     'csv lists fills and leaves the receipt empty when it was not entered',
     () {
-      final csv = journalCsv([
-        _fill('b', FuelType.lpg, 2, 1100, 8, false, total: 24000),
-        _fill('a', FuelType.petrol, 1, 1000, 40.5, true, total: 220000),
-        _fill('c', FuelType.petrol, 3, 1200, 10, false),
-      ]);
+      final csv = journalCsv(
+        [
+          _fill('b', FuelType.lpg, 2, 1100, 8, false, total: 24000),
+          _fill('a', FuelType.petrol, 1, 1000, 40.5, true, total: 220000),
+          _fill('c', FuelType.petrol, 3, 1200, 10, false),
+        ],
+        resets: const [
+          OdometerReset(
+            id: 'panel',
+            occurredAtMs: 4,
+            odometerKm: 50,
+            createdAtMs: 4,
+          ),
+        ],
+      );
       expect(csv.startsWith('\uFEFF$journalCsvHeader\n'), isTrue);
+      expect(csv.contains(journalCsvFilteredLine), isFalse);
       final lines = csv.replaceFirst('\uFEFF', '').trim().split('\n');
-      expect(lines, hasLength(4));
-      expect(lines[1], contains('Бензин;40,5;2200,00;1000;да'));
-      expect(lines[2], contains('Газ;8;240,00;1100;нет'));
-      expect(lines[3], contains('Бензин;10;;1200;нет'));
+      expect(lines, hasLength(5));
+      expect(lines[1], contains('Заправка;Бензин;40,5;2200,00;1000;да'));
+      expect(lines[2], contains('Заправка;Газ;8;240,00;1100;нет'));
+      expect(lines[3], contains('Заправка;Бензин;10;;1200;нет'));
+      expect(lines[4], contains('Замена панели;;;;50;'));
       expect(csv.contains('л/100'), isFalse);
       expect(csv.contains('грн/л'), isFalse);
+      final filtered = journalCsv([
+        _fill('a', FuelType.petrol, 1, 1000, 40, true),
+      ], filtered: true);
+      expect(filtered.startsWith('\uFEFF$journalCsvFilteredLine\n'), isTrue);
+      expect(filtered.contains(journalCsvHeader), isTrue);
+      expect(
+        journalExportFileName(DateTime(2026, 11, 1, 20, 45, 12, 3)),
+        'duofuel-zhurnal-20261101-204512003.csv',
+      );
+      expect(
+        journalExportFileName(DateTime(2026, 11, 1, 20, 45, 12, 3))
+            .contains('duofuel-zhurnal.csv'),
+        isFalse,
+      );
     },
   );
 
@@ -101,6 +128,18 @@ void main() {
     }
     expect(points.first.ratePer100, closeTo(10, 1e-9));
     expect(cycleChartPoints(const [], const []), isEmpty);
+    final scale = chartYMax(const [10, 10.5]);
+    expect(scale, greaterThan(10.5));
+    expect((10.5 - 10) / scale, lessThan(0.2));
+    expect(axisLabelsThatFit(const [0, 10, 40], const [30, 30, 30], gap: 8), [
+      0,
+      2,
+    ]);
+    expect(cycleChartSemantics(points), contains('л/100 км'));
+    expect(
+      cycleChartSemantics(points),
+      contains(formatChartDate(points.first.endMs)),
+    );
   });
 
   test('theme choice parses the three modes', () {
@@ -137,6 +176,7 @@ void main() {
   testWidgets('export sends the journal csv and the chart shows both series', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     String? exported;
     await _pump(tester, onExportCsv: (csv) async => exported = csv);
     await _saveFill(tester, quantity: '40', odometer: '1000', full: true);
@@ -167,6 +207,15 @@ void main() {
     expect(find.byKey(const Key('cycle-chart')), findsOneWidget);
     expect(find.byKey(const Key('cycle-series-petrol')), findsOneWidget);
     expect(find.byKey(const Key('cycle-series-lpg')), findsOneWidget);
+    expect(find.byKey(const Key('cycle-axis-date')), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(
+        RegExp(
+          r'График расхода закрытых циклов.*л/100 км.*\d{2}\.\d{2}\.\d{4}',
+        ),
+      ),
+      findsOneWidget,
+    );
     expect(_text(tester, 'consumption-petrol-latest'), '10,0 л/100 км');
     expect(_text(tester, 'price-lpg-average'), '30,00 грн/л');
 
@@ -179,6 +228,33 @@ void main() {
     expect(exported!, contains('Бензин;20;1100,00;1300;да'));
     expect(exported!, contains('Газ;4;120,00;1600;да'));
     expect(exported!.contains('л/100'), isFalse);
+    expect(exported!.contains(journalCsvFilteredLine), isFalse);
+    expect(exported!, contains('Заправка;Бензин;20;1100,00;1300;да'));
+
+    await tester.tap(find.byTooltip('Только газ'));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('journal-export')));
+    await tester.pump();
+    expect(exported!, contains(journalCsvFilteredLine));
+    expect(exported!, contains('Заправка;Газ;4;120,00;1600;да'));
+    expect(exported!.contains('Бензин'), isFalse);
+    semantics.dispose();
+  });
+
+  testWidgets('fuel filter stays after opening the summary', (tester) async {
+    await _pump(tester);
+    await _saveFill(tester, quantity: '40', odometer: '1000');
+    await _saveFill(tester, quantity: '7', odometer: '1300', fuelLpg: true);
+    await tester.tap(find.text('Журнал'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Только газ'));
+    await tester.pump();
+    await tester.tap(find.text('Сводка'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Журнал'));
+    await tester.pumpAndSettle();
+    expect(find.text('7 л'), findsOneWidget);
+    expect(find.text('40 л'), findsNothing);
   });
 
   testWidgets('theme follows light, dark and system', (tester) async {
@@ -257,10 +333,8 @@ Future<void> _saveFill(
   if (total != null) {
     await tester.enterText(find.byKey(const Key('total')), total);
   }
-  if (full) {
-    await tester.tap(find.byKey(const Key('full-tank')));
-    await tester.pump();
-  }
+  await tester.tap(find.byKey(Key(full ? 'full-tank' : 'not-full')));
+  await tester.pump();
   await tester.tap(find.byKey(const Key('save-fuel')));
   await tester.pumpAndSettle();
 }

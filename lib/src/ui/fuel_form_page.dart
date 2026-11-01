@@ -7,7 +7,13 @@ import '../model/ids.dart';
 import '../model/records.dart';
 import 'format.dart';
 import 'log_controller.dart';
+import 'reset_form_page.dart';
 import 'when_buttons.dart';
+
+const fullTankPrompt =
+    'Отметьте полный бак до сохранения. Без него расход останется «Недостаточно данных».';
+const fullTankChosen = 'Полный бак. Эта заправка может закрыть цикл.';
+const partialTankChosen = 'Не полный бак. Эта заправка не закроет цикл.';
 
 void openFuel(
   BuildContext context,
@@ -38,7 +44,8 @@ class _FuelFormPageState extends State<FuelFormPage> {
       widget.existing?.createdAtMs ?? DateTime.now().millisecondsSinceEpoch;
   late FuelType _fuel =
       widget.existing?.fuelType ?? lastFuelType(widget.controller.entries);
-  late bool _full = widget.existing?.isFull ?? false;
+  late bool? _full = widget.existing?.isFull;
+  bool _missingFull = false;
   late DateTime _date = _initialDate();
   late TimeOfDay _time = TimeOfDay.fromDateTime(_date);
   late final TextEditingController _quantity = TextEditingController(
@@ -59,6 +66,7 @@ class _FuelFormPageState extends State<FuelFormPage> {
   @override
   void initState() {
     super.initState();
+    widget.controller.addListener(_refreshDraft);
     _quantity.addListener(_refreshDraft);
     _total.addListener(_refreshDraft);
     _odometer.addListener(_refreshDraft);
@@ -76,6 +84,7 @@ class _FuelFormPageState extends State<FuelFormPage> {
 
   @override
   void dispose() {
+    widget.controller.removeListener(_refreshDraft);
     _quantity.removeListener(_refreshDraft);
     _total.removeListener(_refreshDraft);
     _odometer.removeListener(_refreshDraft);
@@ -178,8 +187,12 @@ class _FuelFormPageState extends State<FuelFormPage> {
         ),
       );
     }
-    setState(() => _issues = issues);
-    if (issues.isNotEmpty) return;
+    final full = _full;
+    setState(() {
+      _issues = issues;
+      _missingFull = full == null;
+    });
+    if (full == null || issues.isNotEmpty) return;
     final existing = widget.existing;
     final totalMinor = parseTotalMinor(_total.text);
     final entry = FuelEntry(
@@ -189,7 +202,7 @@ class _FuelFormPageState extends State<FuelFormPage> {
       odometerKm: parseOdometer(_odometer.text)!,
       quantity: parseQuantity(_quantity.text)!,
       unit: existing?.unit ?? 'L',
-      isFull: _full,
+      isFull: full,
       createdAtMs: _createdAtMs,
       totalMinor: totalMinor,
       currency: totalMinor == null ? null : uahCurrency,
@@ -212,10 +225,58 @@ class _FuelFormPageState extends State<FuelFormPage> {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: FilledButton(
-            key: const Key('save-fuel'),
-            onPressed: _save,
-            child: const Text('Сохранить'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Полный бак?', style: text.titleSmall),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _TankChoice(
+                      key: const Key('full-tank'),
+                      selected: _full == true,
+                      label: 'Полный бак',
+                      onPressed: () => setState(() {
+                        _full = true;
+                        _missingFull = false;
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _TankChoice(
+                      key: const Key('not-full'),
+                      selected: _full == false,
+                      label: 'Не полный',
+                      onPressed: () => setState(() {
+                        _full = false;
+                        _missingFull = false;
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                switch (_full) {
+                  true => fullTankChosen,
+                  false => partialTankChosen,
+                  null => fullTankPrompt,
+                },
+                key: const Key('full-tank-hint'),
+                style: text.bodyMedium?.copyWith(
+                  color: _missingFull ? scheme.error : scheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                key: const Key('save-fuel'),
+                onPressed: _save,
+                child: const Text('Сохранить'),
+              ),
+            ],
           ),
         ),
       ),
@@ -246,36 +307,6 @@ class _FuelFormPageState extends State<FuelFormPage> {
             selected: {_fuel},
             onSelectionChanged: (selected) =>
                 setState(() => _fuel = selected.first),
-          ),
-          const SizedBox(height: 16),
-          Text('Чтобы посчитать расход', style: text.titleSmall),
-          const SizedBox(height: 8),
-          Material(
-            color: _full
-                ? scheme.primaryContainer
-                : scheme.surfaceContainerHighest,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(
-                color: _full ? scheme.primary : scheme.outlineVariant,
-              ),
-            ),
-            child: SwitchListTile(
-              key: const Key('full-tank'),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              title: const Text('Полный бак'),
-              subtitle: const Text(
-                'До отсечки. Иначе эта заправка не закроет цикл.',
-              ),
-              value: _full,
-              onChanged: (value) => setState(() => _full = value),
-            ),
           ),
           const SizedBox(height: 16),
           Text('Запись', style: text.titleSmall),
@@ -336,6 +367,19 @@ class _FuelFormPageState extends State<FuelFormPage> {
             ),
             keyboardType: TextInputType.number,
           ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('open-reset'),
+              onPressed: () => openReset(context, widget.controller),
+              icon: const Icon(Icons.speed_outlined),
+              label: const Text('Замена панели'),
+            ),
+          ),
+          Text(
+            'Если меняли панель, новое показание вводится здесь, а не в заправке.',
+            style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          ),
           const SizedBox(height: 12),
           WhenButtons(
             when: _when,
@@ -345,5 +389,33 @@ class _FuelFormPageState extends State<FuelFormPage> {
         ],
       ),
     );
+  }
+}
+
+class _TankChoice extends StatelessWidget {
+  const _TankChoice({
+    super.key,
+    required this.selected,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final bool selected;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = ButtonStyle(
+      minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
+      textStyle: const WidgetStatePropertyAll(
+        TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      ),
+    );
+    final child = Text(label, textAlign: TextAlign.center);
+    if (selected) {
+      return FilledButton(style: style, onPressed: onPressed, child: child);
+    }
+    return OutlinedButton(style: style, onPressed: onPressed, child: child);
   }
 }
