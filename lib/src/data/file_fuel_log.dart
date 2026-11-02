@@ -30,11 +30,37 @@ class FileFuelLog implements FuelLog {
   @override
   Future<void> write(FuelSnapshot snapshot) {
     return _sync(() async {
-      final encoded = '${jsonEncode(encodeSnapshot(snapshot))}\n';
-      final temporary = File('${file.path}.tmp');
-      await temporary.writeAsString(encoded, flush: true);
-      await temporary.rename(file.path);
+      await _writeAtomically(snapshotText(snapshot));
     });
+  }
+
+  @override
+  Future<String?> rawJournal() {
+    return _sync(() async {
+      if (!await file.exists()) return null;
+      return file.readAsString();
+    });
+  }
+
+  @override
+  Future<String?> keepBrokenAndStartEmpty() {
+    return _sync(() async {
+      String? keptName;
+      if (await file.exists()) {
+        final stamp = DateTime.now().millisecondsSinceEpoch;
+        final kept = File('${file.path}.broken-$stamp');
+        await file.rename(kept.path);
+        keptName = kept.uri.pathSegments.last;
+      }
+      await _writeAtomically(snapshotText(FuelSnapshot.initial()));
+      return keptName;
+    });
+  }
+
+  Future<void> _writeAtomically(String encoded) async {
+    final temporary = File('${file.path}.tmp');
+    await temporary.writeAsString(encoded, flush: true);
+    await temporary.rename(file.path);
   }
 }
 
@@ -64,10 +90,16 @@ Map<String, Object?> encodeSnapshot(FuelSnapshot snapshot) {
           'occurredAtMs': reset.occurredAtMs,
           'odometerKm': reset.odometerKm,
           'createdAtMs': reset.createdAtMs,
+          if (reset.linkedFuelEntryId != null)
+            'linkedFuelEntryId': reset.linkedFuelEntryId,
         },
     ],
   };
 }
+
+/// Тот же JSON, что лежит в fuel_log.json. Его можно прочитать через [decodeSnapshot].
+String snapshotText(FuelSnapshot snapshot) =>
+    '${jsonEncode(encodeSnapshot(snapshot))}\n';
 
 FuelSnapshot decodeSnapshot(String text) {
   final Object? raw;
@@ -175,10 +207,15 @@ OdometerReset _reset(Object? raw) {
       created is! int) {
     throw const FuelLogReadException(fuelLogReadError);
   }
+  final linked = raw['linkedFuelEntryId'];
+  if (linked != null && (linked is! String || linked.isEmpty)) {
+    throw const FuelLogReadException(fuelLogReadError);
+  }
   return OdometerReset(
     id: id,
     occurredAtMs: occurred,
     odometerKm: odometer,
     createdAtMs: created,
+    linkedFuelEntryId: linked is String ? linked : null,
   );
 }

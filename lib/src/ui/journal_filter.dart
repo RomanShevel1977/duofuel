@@ -22,6 +22,11 @@ class JournalFilter {
 
   bool allowsReset(OdometerReset reset) {
     if (fuel != null) return false;
+    return allowsResetExport(reset);
+  }
+
+  /// В CSV замена панели остаётся при фильтре топлива, если подходят день и поиск.
+  bool allowsResetExport(OdometerReset reset) {
     if (!_onDay(reset.occurredAtMs)) return false;
     final haystack =
         'замена панели ${reset.odometerKm} ${formatWhenMs(reset.occurredAtMs)}';

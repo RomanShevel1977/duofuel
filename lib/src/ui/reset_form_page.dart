@@ -97,8 +97,12 @@ class _ResetFormPageState extends State<ResetFormPage> {
       linkedFuelEntryId: existing?.linkedFuelEntryId,
     );
     final messenger = ScaffoldMessenger.of(context);
-    await widget.controller.saveReset(reset);
+    final saved = await widget.controller.saveReset(reset);
     if (!mounted) return;
+    if (!saved) {
+      messenger.showSnackBar(const SnackBar(content: Text(journalWriteError)));
+      return;
+    }
     Navigator.pop(context);
     messenger.showSnackBar(
       const SnackBar(content: Text('Замена панели сохранена')),

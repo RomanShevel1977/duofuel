@@ -61,8 +61,12 @@ class _RenameDialogState extends State<_RenameDialog> {
       setState(() => _issue = issues.first.line);
       return;
     }
-    await widget.controller.rename(_name.text);
+    final saved = await widget.controller.rename(_name.text);
     if (!mounted) return;
+    if (!saved) {
+      setState(() => _issue = journalWriteError);
+      return;
+    }
     Navigator.pop(context);
   }
 

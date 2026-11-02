@@ -4,14 +4,26 @@ import 'format.dart';
 const journalCsvHeader =
     'Дата;Событие;Топливо;Литры;Сумма чека;Одометр;Полный бак';
 
-const journalCsvFilteredLine =
-    'Фильтр;в файле только строки, которые сейчас видны в журнале';
+String journalFilterLine({FuelType? fuel, DateTime? day, String text = ''}) {
+  final parts = <String>[
+    if (fuel != null) 'топливо: ${fuelLabel(fuel)}',
+    if (day != null) 'день: ${_csvDay(day)}',
+    if (text.trim().isNotEmpty) 'текст: ${text.trim()}',
+  ];
+  if (parts.isEmpty) return '';
+  return 'Фильтр;${parts.join(';')}';
+}
+
+String _csvDay(DateTime day) {
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(day.day)}.${two(day.month)}.${day.year}';
+}
 
 /// Журнал для таблицы. Расход сюда не входит: он считается отдельно.
 String journalCsv(
   List<FuelEntry> entries, {
   List<OdometerReset> resets = const [],
-  bool filtered = false,
+  String filterLine = '',
 }) {
   final lines = <_CsvLine>[
     for (final entry in entries)
@@ -36,7 +48,7 @@ String journalCsv(
       ]),
   ]..sort((a, b) => a.key.compareTo(b.key));
   final body = <String>[
-    if (filtered) journalCsvFilteredLine,
+    if (filterLine.isNotEmpty) filterLine,
     journalCsvHeader,
     for (final line in lines) line.cells.map(_cell).join(';'),
   ];
