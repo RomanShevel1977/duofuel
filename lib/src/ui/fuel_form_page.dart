@@ -208,8 +208,12 @@ class _FuelFormPageState extends State<FuelFormPage> {
       currency: totalMinor == null ? null : uahCurrency,
     );
     final messenger = ScaffoldMessenger.of(context);
-    await widget.controller.saveEntry(entry);
+    final saved = await widget.controller.saveEntry(entry);
     if (!mounted) return;
+    if (!saved) {
+      messenger.showSnackBar(const SnackBar(content: Text(journalWriteError)));
+      return;
+    }
     Navigator.pop(context);
     messenger.showSnackBar(const SnackBar(content: Text('Заправка сохранена')));
   }

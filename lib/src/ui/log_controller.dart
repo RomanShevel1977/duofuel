@@ -2,8 +2,11 @@ import 'package:flutter/foundation.dart';
 
 import '../calc/fuel_cycle.dart';
 import '../calc/price_average.dart';
+import '../data/file_fuel_log.dart';
 import '../data/fuel_log.dart';
 import '../model/records.dart';
+
+const journalWriteError = 'Не удалось записать журнал.';
 
 class LogController extends ChangeNotifier {
   LogController(this.log);
@@ -11,6 +14,7 @@ class LogController extends ChangeNotifier {
   final FuelLog log;
   bool loading = true;
   String? readError;
+  String? writeError;
   String vehicleName = '';
   List<FuelEntry> entries = const [];
   List<OdometerReset> resets = const [];
@@ -34,13 +38,28 @@ class LogController extends ChangeNotifier {
     }
   }
 
-  Future<void> rename(String name) async {
-    if (!canWrite) return;
-    await _commit(_snapshot.copyWith(vehicleName: name.trim()));
+  String journalSnapshot() => snapshotText(_snapshot);
+
+  Future<String?> rawJournal() => log.rawJournal();
+
+  Future<String?> startEmptyJournal() async {
+    final kept = await log.keepBrokenAndStartEmpty();
+    await reload();
+    return kept;
   }
 
-  Future<void> saveEntry(FuelEntry entry) async {
-    if (!canWrite) return;
+  Future<bool> importSnapshot(String text) async {
+    final snapshot = decodeSnapshot(text);
+    return _commit(snapshot);
+  }
+
+  Future<bool> rename(String name) async {
+    if (!canWrite) return false;
+    return _commit(_snapshot.copyWith(vehicleName: name.trim()));
+  }
+
+  Future<bool> saveEntry(FuelEntry entry) async {
+    if (!canWrite) return false;
     final next = [..._snapshot.entries];
     final index = next.indexWhere((item) => item.id == entry.id);
     if (index >= 0) {
@@ -48,20 +67,20 @@ class LogController extends ChangeNotifier {
     } else {
       next.add(entry);
     }
-    await _commit(_snapshot.copyWith(entries: next));
+    return _commit(_snapshot.copyWith(entries: next));
   }
 
-  Future<void> deleteEntry(String id) async {
-    if (!canWrite) return;
-    await _commit(
+  Future<bool> deleteEntry(String id) async {
+    if (!canWrite) return false;
+    return _commit(
       _snapshot.copyWith(
         entries: _snapshot.entries.where((item) => item.id != id).toList(),
       ),
     );
   }
 
-  Future<void> saveReset(OdometerReset reset) async {
-    if (!canWrite) return;
+  Future<bool> saveReset(OdometerReset reset) async {
+    if (!canWrite) return false;
     final next = [..._snapshot.resets];
     final index = next.indexWhere((item) => item.id == reset.id);
     if (index >= 0) {
@@ -69,21 +88,29 @@ class LogController extends ChangeNotifier {
     } else {
       next.add(reset);
     }
-    await _commit(_snapshot.copyWith(resets: next));
+    return _commit(_snapshot.copyWith(resets: next));
   }
 
-  Future<void> deleteReset(String id) async {
-    if (!canWrite) return;
-    await _commit(
+  Future<bool> deleteReset(String id) async {
+    if (!canWrite) return false;
+    return _commit(
       _snapshot.copyWith(
         resets: _snapshot.resets.where((item) => item.id != id).toList(),
       ),
     );
   }
 
-  Future<void> _commit(FuelSnapshot snapshot) async {
-    await log.write(snapshot);
+  Future<bool> _commit(FuelSnapshot snapshot) async {
+    try {
+      await log.write(snapshot);
+    } catch (_) {
+      writeError = journalWriteError;
+      notifyListeners();
+      return false;
+    }
+    writeError = null;
     _apply(snapshot);
+    return true;
   }
 
   void _apply(FuelSnapshot snapshot) {

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:duofuel/src/data/file_fuel_log.dart';
 import 'package:duofuel/src/data/fuel_log.dart';
 import 'package:duofuel/src/data/memory_fuel_log.dart';
@@ -21,15 +23,13 @@ void main() {
     expect(find.text('Нужны две полные заправки газа.'), findsNWidgets(2));
     expect(
       find.text(
-        'Нужны две полные заправки бензина. Цена считается по суммам чека.',
+        'Укажите сумму чека. Средняя цена — сумма чеков, делённая на литры.',
       ),
-      findsOneWidget,
+      findsNWidgets(2),
     );
     expect(
-      find.text(
-        'Нужны две полные заправки газа. Цена считается по суммам чека.',
-      ),
-      findsOneWidget,
+      find.textContaining('две полные заправки бензина. Цена'),
+      findsNothing,
     );
     expect(find.textContaining('0,0'), findsNothing);
     expect(find.textContaining('0 л/100'), findsNothing);
@@ -64,7 +64,7 @@ void main() {
       find.text(
         'Укажите сумму чека. Средняя цена — сумма чеков, делённая на литры.',
       ),
-      findsOneWidget,
+      findsNWidgets(2),
     );
   });
 
@@ -331,13 +331,279 @@ void main() {
     expect(controller.resets.single.odometerKm, 50);
     expect(controller.entries, isEmpty);
   });
+
+  testWidgets('an open cycle asks for another full fill of that fuel', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await _saveFill(tester, quantity: '40', odometer: '1000', full: true);
+    await _saveFill(tester, quantity: '10', odometer: '1100');
+    expect(
+      find.text('Бензин: нужна ещё одна полная заправка бензина.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('незакрытый цикл'), findsNothing);
+    expect(_text(tester, 'consumption-petrol-latest'), 'Недостаточно данных');
+    expect(find.text('Последний цикл без числа'), findsNothing);
+    expect(
+      find.text(
+        'Укажите сумму чека. Средняя цена — сумма чеков, делённая на литры.',
+      ),
+      findsNWidgets(2),
+    );
+  });
+
+  testWidgets(
+    'a closed cycle without a rate is not a zero beside the average',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final log = MemoryFuelLog();
+      await log.write(
+        FuelSnapshot(
+          vehicleName: 'Автомобиль',
+          entries: const [
+            FuelEntry(
+              id: 'open',
+              fuelType: FuelType.petrol,
+              occurredAtMs: 1,
+              odometerKm: 1000,
+              quantity: 40,
+              unit: 'L',
+              isFull: true,
+              createdAtMs: 1,
+            ),
+            FuelEntry(
+              id: 'close',
+              fuelType: FuelType.petrol,
+              occurredAtMs: 3,
+              odometerKm: 1200,
+              quantity: 20,
+              unit: 'L',
+              isFull: true,
+              createdAtMs: 3,
+            ),
+            FuelEntry(
+              id: 'next',
+              fuelType: FuelType.petrol,
+              occurredAtMs: 4,
+              odometerKm: 1200,
+              quantity: 10,
+              unit: 'L',
+              isFull: true,
+              createdAtMs: 4,
+            ),
+            FuelEntry(
+              id: 'after',
+              fuelType: FuelType.petrol,
+              occurredAtMs: 6,
+              odometerKm: 1500,
+              quantity: 15,
+              unit: 'L',
+              isFull: true,
+              createdAtMs: 6,
+            ),
+          ],
+          resets: const [
+            OdometerReset(
+              id: 'panel',
+              occurredAtMs: 5,
+              odometerKm: 0,
+              createdAtMs: 5,
+            ),
+          ],
+        ),
+      );
+      final controller = LogController(log);
+      await controller.reload();
+      await _pump(tester, controller: controller);
+      expect(_text(tester, 'consumption-petrol-latest'), 'Недостаточно данных');
+      expect(_text(tester, 'consumption-petrol-average'), '10,0 л/100 км');
+      expect(find.text('Последний цикл без числа'), findsOneWidget);
+      expect(find.textContaining('Не ноль:'), findsWidgets);
+      expect(find.text('0,0 л/100 км'), findsNothing);
+      expect(
+        find.bySemanticsLabel(RegExp('разрыв шкалы, расход не посчитан')),
+        findsOneWidget,
+      );
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
+    'a corrupt journal can be shared and emptied only after confirm',
+    (tester) async {
+      final log = _BrokenLog();
+      String? shared;
+      final controller = LogController(log);
+      await controller.reload();
+      await _pump(
+        tester,
+        controller: controller,
+        onShareText: (text) async => shared = text,
+      );
+      expect(find.text('Отправить файл'), findsOneWidget);
+      expect(find.text('Начать пустой журнал'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('share-broken-journal')));
+      await tester.pumpAndSettle();
+      expect(shared, log.raw);
+      expect(log.emptied, isFalse);
+
+      await tester.tap(find.byKey(const Key('start-empty-journal')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('confirm-empty-journal')), findsOneWidget);
+      await tester.tap(find.text('Отмена'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('read-error')), findsOneWidget);
+      expect(log.emptied, isFalse);
+
+      await tester.tap(find.byKey(const Key('start-empty-journal')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirm-empty-journal')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(log.emptied, isTrue);
+      expect(log.keptName, 'fuel_log.json.broken-1');
+      expect(find.textContaining('fuel_log.json.broken-1'), findsOneWidget);
+      expect(find.byKey(const Key('read-error')), findsNothing);
+      expect(find.byKey(const Key('fab-fuel')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a failed save, reset, or rename says the journal was not written',
+    (tester) async {
+      final controller = LogController(_FailingWriteLog());
+      await controller.reload();
+      await _pump(tester, controller: controller);
+
+      await tester.tap(find.byKey(const Key('fab-fuel')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('quantity')), '40');
+      await tester.enterText(find.byKey(const Key('odometer')), '1000');
+      await tester.tap(find.byKey(const Key('full-tank')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('save-fuel')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text(journalWriteError), findsOneWidget);
+      expect(find.byKey(const Key('save-fuel')), findsOneWidget);
+      expect(controller.entries, isEmpty);
+
+      await tester.tap(find.byKey(const Key('open-reset')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('reset-odometer')), '50');
+      await tester.tap(find.byKey(const Key('save-reset')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text(journalWriteError), findsWidgets);
+      expect(find.byKey(const Key('save-reset')), findsOneWidget);
+      expect(controller.resets, isEmpty);
+
+      await tester.tap(find.byTooltip('Назад'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Назад'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('rename-vehicle')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('vehicle-name')), 'Нива');
+      await tester.tap(find.text('Сохранить'));
+      await tester.pump();
+      expect(find.text('Имя автомобиля'), findsOneWidget);
+      expect(find.text(journalWriteError), findsWidgets);
+      expect(controller.vehicleName, 'Автомобиль');
+    },
+  );
+
+  testWidgets('a journal copy can be read back and replaces the current log', (
+    tester,
+  ) async {
+    String? shared;
+    final copy = snapshotText(
+      FuelSnapshot(
+        vehicleName: 'Нива',
+        entries: const [
+          FuelEntry(
+            id: 'copy-1',
+            fuelType: FuelType.petrol,
+            occurredAtMs: 1,
+            odometerKm: 1000,
+            quantity: 40,
+            unit: 'L',
+            isFull: true,
+            createdAtMs: 1,
+          ),
+        ],
+        resets: const [
+          OdometerReset(
+            id: 'panel-copy',
+            occurredAtMs: 4,
+            odometerKm: 12,
+            createdAtMs: 4,
+            linkedFuelEntryId: 'copy-1',
+          ),
+        ],
+      ),
+    );
+    var pick = copy;
+    final controller = await _pump(
+      tester,
+      onShareText: (text) async => shared = text,
+      pickSnapshot: () async => pick,
+    );
+    await _saveFill(tester, quantity: '40', odometer: '1000', full: true);
+    final oldId = controller.entries.single.id;
+    await tester.tap(find.byTooltip('Ещё'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Копия журнала'));
+    await tester.pumpAndSettle();
+    expect(decodeSnapshot(shared!).entries.single.id, oldId);
+
+    await tester.tap(find.byTooltip('Ещё'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Восстановить копию'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Отмена'));
+    await tester.pumpAndSettle();
+    expect(controller.entries.single.id, oldId);
+
+    await tester.tap(find.byTooltip('Ещё'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Восстановить копию'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Заменить'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(controller.vehicleName, 'Нива');
+    expect(controller.entries.single.id, 'copy-1');
+    expect(controller.resets.single.linkedFuelEntryId, 'copy-1');
+    expect(find.text('Журнал восстановлен из копии.'), findsOneWidget);
+    tester
+        .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+        .hideCurrentSnackBar();
+    await tester.pumpAndSettle();
+
+    pick = '{нет';
+    await tester.tap(find.byTooltip('Ещё'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Восстановить копию'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Заменить'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Это не копия журнала DuoFuel.'), findsOneWidget);
+    expect(controller.entries.single.id, 'copy-1');
+  });
 }
 
 class _BrokenLog implements FuelLog {
   int writes = 0;
+  bool emptied = false;
+  String? keptName;
+  final raw = '{не журнал';
 
   @override
   Future<FuelSnapshot> read() async {
+    if (emptied) return FuelSnapshot.initial();
     throw const FuelLogReadException(fuelLogReadError);
   }
 
@@ -345,11 +611,41 @@ class _BrokenLog implements FuelLog {
   Future<void> write(FuelSnapshot snapshot) async {
     writes += 1;
   }
+
+  @override
+  Future<String?> rawJournal() async => emptied ? null : raw;
+
+  @override
+  Future<String?> keepBrokenAndStartEmpty() async {
+    keptName = 'fuel_log.json.broken-1';
+    emptied = true;
+    return keptName;
+  }
+}
+
+class _FailingWriteLog implements FuelLog {
+  FuelSnapshot snapshot = FuelSnapshot.initial();
+
+  @override
+  Future<FuelSnapshot> read() async => snapshot;
+
+  @override
+  Future<void> write(FuelSnapshot snapshot) async {
+    throw const FileSystemException('disk');
+  }
+
+  @override
+  Future<String?> rawJournal() async => null;
+
+  @override
+  Future<String?> keepBrokenAndStartEmpty() async => null;
 }
 
 Future<LogController> _pump(
   WidgetTester tester, {
   LogController? controller,
+  Future<void> Function(String text)? onShareText,
+  Future<String?> Function()? pickSnapshot,
 }) async {
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1;
@@ -357,7 +653,13 @@ Future<LogController> _pump(
   addTearDown(tester.view.resetDevicePixelRatio);
   final active = controller ?? LogController(MemoryFuelLog());
   if (controller == null) await active.reload();
-  await tester.pumpWidget(DuoFuelApp(controller: active));
+  await tester.pumpWidget(
+    DuoFuelApp(
+      controller: active,
+      onShareText: onShareText,
+      pickSnapshot: pickSnapshot,
+    ),
+  );
   await tester.pumpAndSettle(
     const Duration(milliseconds: 50),
     EnginePhase.sendSemanticsUpdate,

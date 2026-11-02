@@ -150,7 +150,7 @@ class _FuelCard extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
     final latest = _Readout(
-      label: 'Последний цикл',
+      label: latestLabel(report.latest),
       valueKey: Key('consumption-${fuel.name}-latest'),
       value: latestValue(report.latest),
       detail: latestDetail(report.latest, fuel: fuel),
@@ -173,11 +173,7 @@ class _FuelCard extends StatelessWidget {
       label: 'Средняя цена',
       valueKey: Key('price-${fuel.name}-average'),
       value: priceValue(price),
-      detail: priceDetail(
-        price,
-        fuel: fuel,
-        needsTwoFullFills: report.cycles.isEmpty,
-      ),
+      detail: priceDetail(price),
       factual: price.hasPrice,
     );
     return Card(

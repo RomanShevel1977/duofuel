@@ -31,7 +31,7 @@ void main() {
         ],
       );
       expect(csv.startsWith('\uFEFF$journalCsvHeader\n'), isTrue);
-      expect(csv.contains(journalCsvFilteredLine), isFalse);
+      expect(csv.contains('Фильтр;'), isFalse);
       final lines = csv.replaceFirst('\uFEFF', '').trim().split('\n');
       expect(lines, hasLength(5));
       expect(lines[1], contains('Заправка;Бензин;40,5;2200,00;1000;да'));
@@ -40,11 +40,30 @@ void main() {
       expect(lines[4], contains('Замена панели;;;;50;'));
       expect(csv.contains('л/100'), isFalse);
       expect(csv.contains('грн/л'), isFalse);
-      final filtered = journalCsv([
-        _fill('a', FuelType.petrol, 1, 1000, 40, true),
-      ], filtered: true);
-      expect(filtered.startsWith('\uFEFF$journalCsvFilteredLine\n'), isTrue);
+      final filtered = journalCsv(
+        [_fill('a', FuelType.lpg, 1, 1000, 8, true)],
+        resets: const [
+          OdometerReset(
+            id: 'panel',
+            occurredAtMs: 4,
+            odometerKm: 50,
+            createdAtMs: 4,
+          ),
+        ],
+        filterLine: journalFilterLine(fuel: FuelType.petrol),
+      );
+      expect(filtered.startsWith('\uFEFFФильтр;топливо: Бензин\n'), isTrue);
       expect(filtered.contains(journalCsvHeader), isTrue);
+      expect(filtered, contains('Замена панели;;;;50;'));
+      expect(
+        journalFilterLine(
+          fuel: FuelType.lpg,
+          day: DateTime(2026, 11, 2),
+          text: ' 40 ',
+        ),
+        'Фильтр;топливо: Газ;день: 02.11.2026;текст: 40',
+      );
+      expect(journalFilterLine(), '');
       expect(
         journalExportFileName(DateTime(2026, 11, 1, 20, 45, 12, 3)),
         'duofuel-zhurnal-20261101-204512003.csv',
@@ -64,15 +83,18 @@ void main() {
     const petrolOnly = JournalFilter(fuel: FuelType.petrol);
     expect(petrolOnly.allowsEntry(petrol), isTrue);
     expect(petrolOnly.allowsEntry(lpg), isFalse);
+    const panel = OdometerReset(
+      id: 'r',
+      occurredAtMs: 1,
+      odometerKm: 50,
+      createdAtMs: 1,
+    );
+    expect(petrolOnly.allowsReset(panel), isFalse);
+    expect(petrolOnly.allowsResetExport(panel), isTrue);
+    expect(JournalFilter(text: '50').allowsResetExport(panel), isTrue);
+    expect(JournalFilter(text: 'нет такого').allowsResetExport(panel), isFalse);
     expect(
-      petrolOnly.allowsReset(
-        const OdometerReset(
-          id: 'r',
-          occurredAtMs: 1,
-          odometerKm: 5,
-          createdAtMs: 1,
-        ),
-      ),
+      JournalFilter(day: DateTime(2099)).allowsResetExport(panel),
       isFalse,
     );
     final byText = JournalFilter(text: '1300');
@@ -140,6 +162,62 @@ void main() {
       cycleChartSemantics(points),
       contains(formatChartDate(points.first.endMs)),
     );
+
+    const left = 0.0;
+    const width = 300.0;
+    final early = chartPointX(
+      endMs: 0,
+      index: 0,
+      count: 3,
+      minTime: 0,
+      maxTime: 100,
+      left: left,
+      width: width,
+    );
+    final middle = chartPointX(
+      endMs: 10,
+      index: 1,
+      count: 3,
+      minTime: 0,
+      maxTime: 100,
+      left: left,
+      width: width,
+    );
+    final late = chartPointX(
+      endMs: 100,
+      index: 2,
+      count: 3,
+      minTime: 0,
+      maxTime: 100,
+      left: left,
+      width: width,
+    );
+    expect((middle - left) / width, closeTo(0.1, 1e-9));
+    expect((late - middle) / (middle - early), greaterThan(5));
+
+    final broken = cycleChartPoints(
+      [
+        _fill('open', FuelType.petrol, 1, 1000, 40, true),
+        _fill('close', FuelType.petrol, 3, 1200, 20, true),
+        _fill('next', FuelType.petrol, 4, 1200, 10, true),
+        _fill('after', FuelType.petrol, 6, 1500, 15, true),
+      ],
+      const [
+        OdometerReset(
+          id: 'panel',
+          occurredAtMs: 5,
+          odometerKm: 0,
+          createdAtMs: 5,
+        ),
+      ],
+    );
+    expect(broken, hasLength(2));
+    expect(broken.first.ratePer100, closeTo(10, 1e-9));
+    expect(broken.last.scaleBreak, isTrue);
+    expect(broken.last.ratePer100, isNull);
+    final spoken = cycleChartSemantics(broken);
+    expect(spoken, contains('разрыв шкалы, расход не посчитан'));
+    expect(spoken.contains(' 0,0'), isFalse);
   });
 
   test('theme choice parses the three modes', () {
@@ -207,7 +285,15 @@ void main() {
     expect(find.byKey(const Key('cycle-chart')), findsOneWidget);
     expect(find.byKey(const Key('cycle-series-petrol')), findsOneWidget);
     expect(find.byKey(const Key('cycle-series-lpg')), findsOneWidget);
-    expect(find.byKey(const Key('cycle-axis-date')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('fab-fuel')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-reset')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('reset-odometer')), '50');
+    await tester.tap(find.byKey(const Key('save-reset')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Назад'));
+    await tester.pumpAndSettle();
     expect(
       find.bySemanticsLabel(
         RegExp(
@@ -228,15 +314,21 @@ void main() {
     expect(exported!, contains('Бензин;20;1100,00;1300;да'));
     expect(exported!, contains('Газ;4;120,00;1600;да'));
     expect(exported!.contains('л/100'), isFalse);
-    expect(exported!.contains(journalCsvFilteredLine), isFalse);
+    expect(exported!.contains('Фильтр;'), isFalse);
     expect(exported!, contains('Заправка;Бензин;20;1100,00;1300;да'));
+    expect(exported!, contains('Замена панели'));
+    expect(find.text('Замена панели'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Только газ'));
     await tester.pump();
+    expect(find.text('Замена панели'), findsNothing);
     await tester.tap(find.byKey(const Key('journal-export')));
     await tester.pump();
-    expect(exported!, contains(journalCsvFilteredLine));
+    expect(exported!, contains('Фильтр;топливо: Газ'));
+    expect(exported!.contains('Фильтр;день:'), isFalse);
+    expect(exported!.contains('Фильтр;текст:'), isFalse);
     expect(exported!, contains('Заправка;Газ;4;120,00;1600;да'));
+    expect(exported!, contains('Замена панели'));
     expect(exported!.contains('Бензин'), isFalse);
     semantics.dispose();
   });

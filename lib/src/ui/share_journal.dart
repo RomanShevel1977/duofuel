@@ -28,6 +28,34 @@ Future<File> saveJournalCsv(String csv, {DateTime? now}) async {
   return file;
 }
 
+String snapshotExportFileName(DateTime time) {
+  String two(int number) => number.toString().padLeft(2, '0');
+  final millis = time.millisecond.toString().padLeft(3, '0');
+  return 'duofuel-fuel-log-'
+      '${time.year}${two(time.month)}${two(time.day)}-'
+      '${two(time.hour)}${two(time.minute)}${two(time.second)}$millis.json';
+}
+
+Future<File> saveTextExport({
+  required String contents,
+  required String fileName,
+}) async {
+  final dir = await getApplicationDocumentsDirectory();
+  final folder = Directory('${dir.path}/duofuel-export');
+  await folder.create(recursive: true);
+  final dot = fileName.lastIndexOf('.');
+  final stem = dot < 0 ? fileName : fileName.substring(0, dot);
+  final ext = dot < 0 ? '' : fileName.substring(dot);
+  var file = File('${folder.path}/$fileName');
+  var suffix = 2;
+  while (await file.exists()) {
+    file = File('${folder.path}/$stem-$suffix$ext');
+    suffix += 1;
+  }
+  await file.writeAsString(contents, flush: true);
+  return file;
+}
+
 Future<void> shareJournalFile(File file, {String? text}) {
   final name = file.uri.pathSegments.last;
   return Share.shareXFiles(

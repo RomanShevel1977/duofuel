@@ -11,13 +11,15 @@ class CycleChartPoint {
     required this.fuel,
     required this.endMs,
     required this.ratePer100,
+    this.scaleBreak = false,
   });
 
   final FuelType fuel;
   final int endMs;
 
-  /// Уже посчитанный фактический расход цикла. Новая формула здесь не считается.
-  final double ratePer100;
+  /// Фактический расход цикла. Пусто у разрыва шкалы: это не ноль.
+  final double? ratePer100;
+  final bool scaleBreak;
 }
 
 List<CycleChartPoint> cycleChartPoints(
@@ -28,10 +30,20 @@ List<CycleChartPoint> cycleChartPoints(
   for (final fuel in FuelType.values) {
     for (final cycle in cycles(entries, resets, fuel)) {
       final rate = cycle.ratePer100;
-      if (rate == null || !rate.isFinite) continue;
-      points.add(
-        CycleChartPoint(fuel: fuel, endMs: cycle.endMs, ratePer100: rate),
-      );
+      if (rate != null && rate.isFinite) {
+        points.add(
+          CycleChartPoint(fuel: fuel, endMs: cycle.endMs, ratePer100: rate),
+        );
+      } else if (cycle.rateWarnings.contains(CycleWarning.scaleBreak)) {
+        points.add(
+          CycleChartPoint(
+            fuel: fuel,
+            endMs: cycle.endMs,
+            ratePer100: null,
+            scaleBreak: true,
+          ),
+        );
+      }
     }
   }
   points.sort((a, b) {
@@ -40,6 +52,22 @@ List<CycleChartPoint> cycleChartPoints(
     return a.fuel.index.compareTo(b.fuel.index);
   });
   return points;
+}
+
+/// Та же координата X, что у точки. Даты рисуются на ней, а не равномерно по ширине.
+double chartPointX({
+  required int endMs,
+  required int index,
+  required int count,
+  required int minTime,
+  required int maxTime,
+  required double left,
+  required double width,
+}) {
+  if (count <= 1 || minTime == maxTime) {
+    return left + width * ((index + 1) / (count + 1));
+  }
+  return left + width * ((endMs - minTime) / (maxTime - minTime));
 }
 
 /// Верх шкалы. Ноль всегда внизу, чтобы небольшой разброс не занимал весь график.
@@ -98,21 +126,11 @@ String cycleChartSemantics(List<CycleChartPoint> points) {
   final lines = <String>[
     'График расхода закрытых циклов, шкала от нуля, л/100 км.',
     for (final point in points)
-      '${fuelLabel(point.fuel)}, ${formatChartDate(point.endMs)}, ${formatRate(point.ratePer100)}',
+      point.scaleBreak
+          ? '${fuelLabel(point.fuel)}, ${formatChartDate(point.endMs)}, разрыв шкалы, расход не посчитан'
+          : '${fuelLabel(point.fuel)}, ${formatChartDate(point.endMs)}, ${formatRate(point.ratePer100!)}',
   ];
   return lines.join(' ');
-}
-
-List<String> chartAxisDates(List<CycleChartPoint> points) {
-  if (points.isEmpty) return const [];
-  final first = formatChartDate(points.first.endMs);
-  final last = formatChartDate(points.last.endMs);
-  if (points.length < 3 || first == last) {
-    return first == last ? [first] : [first, last];
-  }
-  final middle = formatChartDate(points[points.length ~/ 2].endMs);
-  if (middle == first || middle == last) return [first, last];
-  return [first, middle, last];
 }
 
 class CycleChart extends StatelessWidget {
@@ -126,7 +144,6 @@ class CycleChart extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final petrol = points.any((point) => point.fuel == FuelType.petrol);
     final lpg = points.any((point) => point.fuel == FuelType.lpg);
-    final dates = chartAxisDates(points);
     return Semantics(
       container: true,
       label: cycleChartSemantics(points),
@@ -158,27 +175,6 @@ class CycleChart extends StatelessWidget {
                       label: text.labelSmall,
                     ),
                   ),
-                ),
-                Row(
-                  children: [
-                    for (var index = 0; index < dates.length; index++)
-                      Expanded(
-                        child: Text(
-                          dates[index],
-                          key: index == 0 ? const Key('cycle-axis-date') : null,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: dates.length == 1
-                              ? TextAlign.center
-                              : index == 0
-                              ? TextAlign.left
-                              : index == dates.length - 1
-                              ? TextAlign.right
-                              : TextAlign.center,
-                          style: text.labelMedium,
-                        ),
-                      ),
-                  ],
                 ),
                 const SizedBox(height: 4),
                 Wrap(
@@ -249,8 +245,11 @@ class _CycleChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (points.isEmpty) return;
-    final plot = Rect.fromLTWH(28, 8, size.width - 36, size.height - 12);
-    final yMax = chartYMax(points.map((point) => point.ratePer100));
+    final plot = Rect.fromLTWH(28, 8, size.width - 36, size.height - 28);
+    final yMax = chartYMax([
+      for (final point in points)
+        if (point.ratePer100 != null) point.ratePer100!,
+    ]);
     canvas.drawLine(
       plot.bottomLeft,
       plot.bottomRight,
@@ -274,66 +273,77 @@ class _CycleChartPainter extends CustomPainter {
       minTime = math.min(minTime, point.endMs);
       maxTime = math.max(maxTime, point.endMs);
     }
-    Offset place(CycleChartPoint point, int index) {
-      final double x;
-      if (points.length == 1 || minTime == maxTime) {
-        x = plot.left + plot.width * ((index + 1) / (points.length + 1));
-      } else {
-        x =
-            plot.left +
-            plot.width * ((point.endMs - minTime) / (maxTime - minTime));
-      }
-      final y = plot.bottom - plot.height * (point.ratePer100 / yMax);
-      return Offset(x, y);
+    double xOf(int index) {
+      return chartPointX(
+        endMs: points[index].endMs,
+        index: index,
+        count: points.length,
+        minTime: minTime,
+        maxTime: maxTime,
+        left: plot.left,
+        width: plot.width,
+      );
     }
 
     void series(FuelType fuel, Color color) {
-      final indexed = <int>[];
-      for (var index = 0; index < points.length; index++) {
-        if (points[index].fuel == fuel) indexed.add(index);
-      }
-      final spots = [for (final index in indexed) place(points[index], index)];
-      if (spots.length >= 2) {
-        final path = Path()..moveTo(spots.first.dx, spots.first.dy);
-        for (final spot in spots.skip(1)) {
-          path.lineTo(spot.dx, spot.dy);
-        }
-        canvas.drawPath(
-          path,
-          Paint()
-            ..color = color
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 3
-            ..strokeCap = StrokeCap.round,
-        );
-      }
+      final stroke = Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round;
+      final segment = <Offset>[];
       final texts = <TextPainter>[];
+      final spots = <Offset>[];
       final centers = <double>[];
       final widths = <double>[];
-      for (final spot in spots) {
+      void flush() {
+        if (segment.length >= 2) {
+          final path = Path()..moveTo(segment.first.dx, segment.first.dy);
+          for (final spot in segment.skip(1)) {
+            path.lineTo(spot.dx, spot.dy);
+          }
+          canvas.drawPath(path, stroke);
+        }
+        segment.clear();
+      }
+
+      for (var index = 0; index < points.length; index++) {
+        final point = points[index];
+        if (point.fuel != fuel) continue;
+        final x = xOf(index);
+        if (point.scaleBreak || point.ratePer100 == null) {
+          flush();
+          if (point.scaleBreak) _gap(canvas, plot, x);
+          continue;
+        }
+        final y = plot.bottom - plot.height * (point.ratePer100! / yMax);
+        final spot = Offset(x, y);
+        segment.add(spot);
+        canvas.drawCircle(spot, 5, Paint()..color = color);
         final painter = TextPainter(
           text: TextSpan(
-            text: formatChartRate(points[indexed[texts.length]].ratePer100),
+            text: formatChartRate(point.ratePer100!),
             style: label?.copyWith(color: color),
           ),
           textDirection: TextDirection.ltr,
           maxLines: 1,
         )..layout();
         texts.add(painter);
+        spots.add(spot);
         centers.add(spot.dx);
         widths.add(painter.width);
       }
+      flush();
       final visible = axisLabelsThatFit(
         centers,
         widths,
         minLeft: plot.left,
         maxRight: plot.right,
       ).toSet();
-      for (var index = 0; index < spots.length; index++) {
-        final spot = spots[index];
-        canvas.drawCircle(spot, 5, Paint()..color = color);
+      for (var index = 0; index < texts.length; index++) {
         if (!visible.contains(index)) continue;
         final painter = texts[index];
+        final spot = spots[index];
         final dx = (spot.dx - painter.width / 2)
             .clamp(plot.left, plot.right - painter.width)
             .toDouble();
@@ -343,6 +353,59 @@ class _CycleChartPainter extends CustomPainter {
 
     series(FuelType.petrol, petrol);
     series(FuelType.lpg, lpg);
+    _dates(canvas, plot, xOf);
+  }
+
+  void _dates(Canvas canvas, Rect plot, double Function(int index) xOf) {
+    final painters = <TextPainter>[];
+    final centers = <double>[];
+    final widths = <double>[];
+    for (var index = 0; index < points.length; index++) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: formatChartDate(points[index].endMs),
+          style: label,
+        ),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+      )..layout();
+      painters.add(painter);
+      centers.add(xOf(index));
+      widths.add(painter.width);
+    }
+    final visible = axisLabelsThatFit(
+      centers,
+      widths,
+      minLeft: plot.left,
+      maxRight: plot.right,
+    );
+    for (final index in visible) {
+      final painter = painters[index];
+      final dx = (centers[index] - painter.width / 2)
+          .clamp(plot.left, plot.right - painter.width)
+          .toDouble();
+      painter.paint(canvas, Offset(dx, plot.bottom + 4));
+    }
+  }
+
+  void _gap(Canvas canvas, Rect plot, double x) {
+    final paint = Paint()
+      ..color = axis
+      ..strokeWidth = 2;
+    final mid = plot.center.dy;
+    canvas.drawLine(Offset(x, plot.top + 16), Offset(x, mid - 6), paint);
+    canvas.drawLine(Offset(x, mid + 6), Offset(x, plot.bottom), paint);
+    canvas.drawLine(Offset(x - 5, mid - 5), Offset(x + 5, mid + 5), paint);
+    canvas.drawLine(Offset(x - 5, mid + 5), Offset(x + 5, mid - 5), paint);
+    final painter = TextPainter(
+      text: TextSpan(text: 'разрыв', style: label),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    final dx = (x - painter.width / 2)
+        .clamp(plot.left, plot.right - painter.width)
+        .toDouble();
+    painter.paint(canvas, Offset(dx, plot.top));
   }
 
   void _tick(Canvas canvas, Rect plot, String text, double y) {

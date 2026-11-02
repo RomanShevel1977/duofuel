@@ -65,9 +65,13 @@ class _JournalPageState extends State<JournalPage> {
       ],
       resets: [
         for (final reset in controller.resets)
-          if (filter.allowsReset(reset)) reset,
+          if (filter.allowsResetExport(reset)) reset,
       ],
-      filtered: filtered,
+      filterLine: journalFilterLine(
+        fuel: filter.fuel,
+        day: filter.day,
+        text: filter.text,
+      ),
     );
     final custom = widget.onExport;
     if (custom != null) {
@@ -418,11 +422,15 @@ class _JournalTile extends StatelessWidget {
                 onPressed: () async {
                   final accepted = await confirmDelete(context);
                   if (!accepted) return;
-                  if (entry != null) {
-                    await controller.deleteEntry(entry.id);
-                  } else if (reset != null) {
-                    await controller.deleteReset(reset.id);
-                  }
+                  final wrote = entry != null
+                      ? await controller.deleteEntry(entry.id)
+                      : reset != null
+                      ? await controller.deleteReset(reset.id)
+                      : true;
+                  if (!context.mounted || wrote) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text(journalWriteError)),
+                  );
                 },
                 icon: const Icon(Icons.delete_outline),
               ),

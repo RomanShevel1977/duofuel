@@ -116,19 +116,12 @@ String priceValue(PriceAverage average) {
   return '${perLitre.toStringAsFixed(2).replaceAll('.', ',')} грн/л';
 }
 
-String priceDetail(
-  PriceAverage average, {
-  FuelType? fuel,
-  bool needsTwoFullFills = true,
-}) {
+String priceDetail(PriceAverage average) {
   if (average.mixedCurrency) return 'Разные валюты не складываются.';
   final money = average.totalMinor;
   final liters = average.liters;
   if (!average.hasPrice || money == null || liters == null) {
-    if (!needsTwoFullFills) {
-      return 'Укажите сумму чека. Средняя цена — сумма чеков, делённая на литры.';
-    }
-    return '${twoFullFillsDetail(fuel)} Цена считается по суммам чека.';
+    return 'Укажите сумму чека. Средняя цена — сумма чеков, делённая на литры.';
   }
   return '${formatMoney(money)} на ${formatLiters(liters)} л · ${average.fillCount} ${fillsWord(average.fillCount)}';
 }
@@ -149,6 +142,13 @@ String cyclesWord(int count) {
   if (mod10 == 1 && mod100 != 11) return 'цикл';
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'цикла';
   return 'циклов';
+}
+
+String latestLabel(CycleResult? cycle) {
+  if (cycle != null && cycle.ratePer100 == null) {
+    return 'Последний цикл без числа';
+  }
+  return 'Последний цикл';
 }
 
 String latestValue(CycleResult? cycle) {
@@ -175,9 +175,10 @@ String latestDetail(CycleResult? cycle, {FuelType? fuel}) {
     if (cycle.rateWarnings.contains(CycleWarning.mixedUnits))
       'разные единицы не складываются',
   ];
-  final volumeText = volume == null ? '' : '${formatLiters(volume)} л · ';
   final why = reasons.isEmpty ? 'расход не посчитан' : reasons.join(', ');
-  return 'Недостаточно данных · $volumeText$why';
+  final volumeText = volume == null ? '' : '${formatLiters(volume)} л, ';
+  return 'Не ноль: расход этого цикла не посчитан — $volumeText$why. '
+      'Среднее берёт только циклы с числом.';
 }
 
 String averageValue(FuelAverage average) {
@@ -213,5 +214,10 @@ String cycleLine(CycleResult cycle) {
   return '$when · ${latestDetail(cycle)}';
 }
 
-String unclosedLine(FuelType fuel) =>
-    '${fuelLabel(fuel)}: незакрытый цикл не показан как фактический расход.';
+String unclosedLine(FuelType fuel) {
+  final name = switch (fuel) {
+    FuelType.petrol => 'бензина',
+    FuelType.lpg => 'газа',
+  };
+  return '${fuelLabel(fuel)}: нужна ещё одна полная заправка $name.';
+}
