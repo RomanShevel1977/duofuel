@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../calc/since_last_fill.dart';
 import '../model/records.dart';
 import 'cycle_chart.dart';
 import 'dialogs.dart';
@@ -183,6 +184,11 @@ class _FuelCardState extends State<_FuelCard> {
       ),
       factual: report.average.litersPer100 != null,
     );
+    final since = sinceLastFill(
+      entries: controller.entries,
+      resets: controller.resets,
+      fuel: fuel,
+    );
     final price = controller.price(fuel);
     final priceReadout = _Readout(
       label: 'Средняя цена',
@@ -222,6 +228,16 @@ class _FuelCardState extends State<_FuelCard> {
                 ),
               ],
             ),
+            if (since != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                sinceLastFillLine(since),
+                key: Key('since-last-${fuel.name}'),
+                style: text.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             latest,
             const SizedBox(height: 8),

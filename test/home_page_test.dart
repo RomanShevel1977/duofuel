@@ -165,7 +165,12 @@ void main() {
     expect(find.text('Изменить заправку'), findsOneWidget);
     expect(_field(tester, 'quantity'), '10,0');
     expect(_field(tester, 'odometer'), '1200');
-    expect(find.text('Прошлое показание: 1000 км'), findsOneWidget);
+    expect(
+      find.text(
+        'Прошлое показание автомобиля: 1000 км. Общая шкала, не последняя заправка этого топлива.',
+      ),
+      findsOneWidget,
+    );
     await tester.enterText(find.byKey(const Key('quantity')), '20');
     await tester.enterText(find.byKey(const Key('total')), '800');
     await tester.tap(find.byKey(const Key('save-fuel')));
@@ -194,7 +199,12 @@ void main() {
     await tester.tap(find.byKey(const Key('fab-fuel')));
     await tester.pumpAndSettle();
     expect(_field(tester, 'odometer'), '');
-    expect(find.text('Прошлое показание: 1000 км'), findsOneWidget);
+    expect(
+      find.text(
+        'Прошлое показание автомобиля: 1000 км. Общая шкала, не последняя заправка этого топлива.',
+      ),
+      findsOneWidget,
+    );
     expect(find.textContaining('0,00'), findsNothing);
     await tester.enterText(find.byKey(const Key('quantity')), '10');
     await tester.tap(find.byKey(const Key('not-full')));
@@ -524,6 +534,49 @@ void main() {
     },
   );
 
+  testWidgets('the card shows kilometres since the last fill of that fuel', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await _saveFill(tester, quantity: '40', odometer: '1000', full: true);
+    await _saveFill(
+      tester,
+      quantity: '8',
+      odometer: '1400',
+      full: true,
+      fuelLpg: true,
+    );
+    expect(find.textContaining('1000 км · с тех пор 400 км'), findsOneWidget);
+    final gas = tester
+        .widget<Text>(find.byKey(const Key('since-last-lpg')))
+        .data!;
+    expect(gas.contains('1400 км'), isTrue);
+    expect(gas.contains('с тех пор'), isFalse);
+  });
+
+  testWidgets('a journal row shows the litre price and the fill can return', (
+    tester,
+  ) async {
+    final controller = await _pump(tester);
+    await _saveFill(tester, quantity: '40', odometer: '1000', total: '2200');
+    final id = controller.entries.single.id;
+    await tester.tap(find.text('Журнал'));
+    await tester.pumpAndSettle();
+    expect(find.text('2200,00 грн · 55,00 грн/л'), findsOneWidget);
+    await tester.tap(find.byTooltip('Удалить'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Удалить'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(controller.entries, isEmpty);
+    expect(find.text('Заправка удалена'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('undo-delete')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(controller.entries.single.id, id);
+    expect(controller.entries.single.totalMinor, 220000);
+  });
+
   testWidgets('a journal copy can be read back and replaces the current log', (
     tester,
   ) async {
@@ -567,6 +620,8 @@ void main() {
     await tester.pumpAndSettle();
     final oldId = controller.entries.single.id;
     await tester.tap(find.text('Журнал'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('journal-more')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('journal-snapshot')));
     await tester.pumpAndSettle();

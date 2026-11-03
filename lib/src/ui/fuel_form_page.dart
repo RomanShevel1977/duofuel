@@ -131,8 +131,11 @@ class _FuelFormPageState extends State<FuelFormPage> {
       exceptEntryId: _entryId,
       savedOdometerKm: widget.existing?.odometerKm,
     );
-    if (previous == null) return 'Целые километры с панели';
-    return 'Прошлое показание: $previous км';
+    if (previous == null) {
+      return 'Целые километры с панели. Шкала одна на бензин и газ.';
+    }
+    return 'Прошлое показание автомобиля: $previous км. '
+        'Общая шкала, не последняя заправка этого топлива.';
   }
 
   String _enteredPriceText() {

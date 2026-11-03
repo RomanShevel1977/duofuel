@@ -224,6 +224,26 @@ void main() {
     final spoken = cycleChartSemantics(broken);
     expect(spoken, contains('разрыв шкалы, расход не посчитан'));
     expect(spoken.contains(' 0,0'), isFalse);
+    expect(
+      chartPointsForSeries(broken, ChartSeries.petrol).last.scaleBreak,
+      isTrue,
+    );
+    expect(chartPointsForSeries(broken, ChartSeries.lpg), isEmpty);
+    final mixed = [
+      const CycleChartPoint(fuel: FuelType.petrol, endMs: 1, ratePer100: 8),
+      const CycleChartPoint(fuel: FuelType.lpg, endMs: 2, ratePer100: 20),
+    ];
+    expect(
+      chartPointsForSeries(mixed, ChartSeries.petrol).single.ratePer100,
+      8,
+    );
+    expect(
+      chartYMax([
+        for (final point in chartPointsForSeries(mixed, ChartSeries.petrol))
+          if (point.ratePer100 != null) point.ratePer100!,
+      ]),
+      lessThan(chartYMax(const [8, 20])),
+    );
   });
 
   testWidgets('a chart point shows its date and a long chart can scroll', (
@@ -252,6 +272,32 @@ void main() {
     expect(find.byKey(const Key('chart-point-detail')), findsOneWidget);
     expect(find.text(chartPointDetail(point)), findsOneWidget);
     expect(find.textContaining('8,5 л/100 км'), findsOneWidget);
+  });
+
+  testWidgets('the chart scale follows the chosen fuel', (tester) async {
+    const petrol = CycleChartPoint(
+      fuel: FuelType.petrol,
+      endMs: 1,
+      ratePer100: 8,
+    );
+    const lpg = CycleChartPoint(fuel: FuelType.lpg, endMs: 2, ratePer100: 20);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: CycleChart(points: [petrol, lpg])),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(formatChartRate(chartYMax(const [20]))), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chart-fuel-petrol')));
+    await tester.pumpAndSettle();
+    expect(find.text(formatChartRate(chartYMax(const [8]))), findsOneWidget);
+    expect(find.text(formatChartRate(chartYMax(const [20]))), findsNothing);
+    expect(find.byKey(const Key('cycle-series-lpg')), findsNothing);
+    expect(find.byKey(const Key('cycle-series-petrol')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chart-fuel-lpg')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chart-series-empty')), findsNothing);
+    expect(find.text(formatChartRate(chartYMax(const [20]))), findsOneWidget);
   });
 
   test('theme choice parses the three modes', () {
@@ -404,6 +450,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('40 л'), findsOneWidget);
     expect(find.text('1 л'), findsNothing);
+    expect(find.byKey(const Key('journal-reset')), findsNothing);
+    await tester.tap(find.byKey(const Key('journal-more')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('journal-reset')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('reset-odometer')), '12');

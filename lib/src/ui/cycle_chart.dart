@@ -54,6 +54,34 @@ List<CycleChartPoint> cycleChartPoints(
   return points;
 }
 
+enum ChartSeries { both, petrol, lpg }
+
+/// Точки выбранного топлива. Шкала Y строится только по ним.
+List<CycleChartPoint> chartPointsForSeries(
+  List<CycleChartPoint> points,
+  ChartSeries series,
+) {
+  return switch (series) {
+    ChartSeries.both => points,
+    ChartSeries.petrol => [
+      for (final point in points)
+        if (point.fuel == FuelType.petrol) point,
+    ],
+    ChartSeries.lpg => [
+      for (final point in points)
+        if (point.fuel == FuelType.lpg) point,
+    ],
+  };
+}
+
+String chartSeriesEmpty(ChartSeries series) {
+  return switch (series) {
+    ChartSeries.petrol => 'Нет циклов бензина',
+    ChartSeries.lpg => 'Нет циклов газа',
+    ChartSeries.both => 'Нет циклов',
+  };
+}
+
 /// Та же координата X, что у точки. Даты рисуются на ней, а не равномерно по ширине.
 double chartPointX({
   required int endMs,
@@ -244,6 +272,7 @@ class CycleChart extends StatefulWidget {
 
 class _CycleChartState extends State<CycleChart> {
   int? _selected;
+  ChartSeries _series = ChartSeries.both;
 
   @override
   void didUpdateWidget(covariant CycleChart oldWidget) {
@@ -251,11 +280,14 @@ class _CycleChartState extends State<CycleChart> {
     if (oldWidget.points != widget.points) _selected = null;
   }
 
+  List<CycleChartPoint> get _visible =>
+      chartPointsForSeries(widget.points, _series);
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
-    final points = widget.points;
+    final points = _visible;
     final petrol = points.any((point) => point.fuel == FuelType.petrol);
     final lpg = points.any((point) => point.fuel == FuelType.lpg);
     final selected = _selected;
@@ -275,6 +307,38 @@ class _CycleChartState extends State<CycleChart> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Расход по циклам', style: text.titleMedium),
+                const SizedBox(height: 8),
+                SegmentedButton<ChartSeries>(
+                  key: const Key('chart-series'),
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  segments: const [
+                    ButtonSegment(
+                      value: ChartSeries.petrol,
+                      label: Text(
+                        'Бензин',
+                        key: Key('chart-fuel-petrol'),
+                      ),
+                    ),
+                    ButtonSegment(
+                      value: ChartSeries.lpg,
+                      label: Text('Газ', key: Key('chart-fuel-lpg')),
+                    ),
+                    ButtonSegment(
+                      value: ChartSeries.both,
+                      label: Text('Оба', key: Key('chart-fuel-both')),
+                    ),
+                  ],
+                  selected: {_series},
+                  onSelectionChanged: (selected) {
+                    setState(() {
+                      _series = selected.first;
+                      _selected = null;
+                    });
+                  },
+                ),
                 Text(
                   'Даты закрытия, шкала от нуля, л/100 км. Нажмите точку.',
                   style: text.bodySmall?.copyWith(
@@ -293,60 +357,69 @@ class _CycleChartState extends State<CycleChart> {
                     ),
                   ),
                 const SizedBox(height: 8),
-                SizedBox(
-                  height: chartPlotHeight,
-                  width: double.infinity,
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 36,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 4, bottom: 24),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                formatChartRate(yMax),
-                                style: text.labelSmall,
-                              ),
-                              Text('0', style: text.labelSmall),
-                            ],
+                if (points.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      chartSeriesEmpty(_series),
+                      key: const Key('chart-series-empty'),
+                    ),
+                  )
+                else
+                  SizedBox(
+                    height: chartPlotHeight,
+                    width: double.infinity,
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 36,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 4, bottom: 24),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  formatChartRate(yMax),
+                                  style: text.labelSmall,
+                                ),
+                                Text('0', style: text.labelSmall),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final width = chartScrollWidth(
-                              count: points.length,
-                              viewportWidth: constraints.maxWidth,
-                            );
-                            return SingleChildScrollView(
-                              key: const Key('cycle-chart-scroll'),
-                              scrollDirection: Axis.horizontal,
-                              child: GestureDetector(
-                                key: const Key('cycle-chart-plot'),
-                                onTapUp: (details) =>
-                                    _select(details.localPosition, width),
-                                child: CustomPaint(
-                                  size: Size(width, chartPlotHeight),
-                                  painter: _CycleChartPainter(
-                                    points: points,
-                                    selected: selected,
-                                    petrol: scheme.primary,
-                                    lpg: scheme.tertiary,
-                                    axis: scheme.outline,
-                                    label: text.labelSmall,
+                        Expanded(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final width = chartScrollWidth(
+                                count: points.length,
+                                viewportWidth: constraints.maxWidth,
+                              );
+                              return SingleChildScrollView(
+                                key: const Key('cycle-chart-scroll'),
+                                scrollDirection: Axis.horizontal,
+                                child: GestureDetector(
+                                  key: const Key('cycle-chart-plot'),
+                                  onTapUp: (details) =>
+                                      _select(details.localPosition, width),
+                                  child: CustomPaint(
+                                    size: Size(width, chartPlotHeight),
+                                    painter: _CycleChartPainter(
+                                      points: points,
+                                      selected: selected,
+                                      petrol: scheme.primary,
+                                      lpg: scheme.tertiary,
+                                      axis: scheme.outline,
+                                      label: text.labelSmall,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
                 const SizedBox(height: 4),
                 Wrap(
                   spacing: 16,
@@ -376,7 +449,7 @@ class _CycleChartState extends State<CycleChart> {
 
   void _select(Offset position, double width) {
     final spots = chartSpots(
-      points: widget.points,
+      points: _visible,
       width: width,
       height: chartPlotHeight,
     );
