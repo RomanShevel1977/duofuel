@@ -3,6 +3,9 @@ import 'format.dart';
 
 enum JournalFuelFilter { all, petrol, lpg }
 
+const journalResetExportNote =
+    'В файле замена панели остаётся, если подходят день и поиск.';
+
 class JournalFilter {
   const JournalFilter({this.text = '', this.fuel, this.day});
 

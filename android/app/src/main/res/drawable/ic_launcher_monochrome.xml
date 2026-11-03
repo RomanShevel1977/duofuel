@@ -4,7 +4,18 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,30C54,30 32,48 32,62C32,74 42,84 54,84C66,84 76,74 76,62C76,48 54,30 54,30Z" />
+    <!-- Same drop as the color icon. Opaque left half is petrol, lighter right half is LPG. -->
+    <group>
+        <clip-path
+            android:pathData="M54,30C54,30 32,48 32,62C32,74 42,84 54,84C66,84 76,74 76,62C76,48 54,30 54,30Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M0,0h54v108h-54z" />
+        <path
+            android:fillColor="#66FFFFFF"
+            android:pathData="M54,0h54v108h-54z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M52,30h4v54h-4z" />
+    </group>
 </vector>

@@ -247,14 +247,6 @@ class _ShellState extends State<_Shell> {
           PopupMenuButton<String>(
             tooltip: 'Ещё',
             onSelected: (value) {
-              if (value == 'export-snapshot') {
-                _exportSnapshot();
-                return;
-              }
-              if (value == 'import-snapshot') {
-                _importSnapshot();
-                return;
-              }
               final choice = switch (value) {
                 'theme-light' => ThemeChoice.light,
                 'theme-dark' => ThemeChoice.dark,
@@ -264,16 +256,6 @@ class _ShellState extends State<_Shell> {
               if (choice != null) widget.onTheme(choice);
             },
             itemBuilder: (context) => [
-              if (controller.canWrite) ...[
-                const PopupMenuItem(
-                  value: 'export-snapshot',
-                  child: Text('Копия журнала'),
-                ),
-                const PopupMenuItem(
-                  value: 'import-snapshot',
-                  child: Text('Восстановить копию'),
-                ),
-              ],
               PopupMenuItem(
                 value: 'theme-system',
                 child: _ThemeRow(
@@ -352,7 +334,12 @@ class _ShellState extends State<_Shell> {
       index: _index,
       children: [
         HomePage(controller: controller),
-        JournalPage(controller: controller, onExport: widget.onExportCsv),
+        JournalPage(
+          controller: controller,
+          onExport: widget.onExportCsv,
+          onExportSnapshot: _exportSnapshot,
+          onImportSnapshot: _importSnapshot,
+        ),
       ],
     );
   }

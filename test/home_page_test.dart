@@ -13,29 +13,35 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   testWidgets('empty consumption is not zero', (tester) async {
     await _pump(tester);
-    expect(_text(tester, 'consumption-petrol-latest'), 'Недостаточно данных');
-    expect(_text(tester, 'consumption-petrol-average'), 'Недостаточно данных');
-    expect(_text(tester, 'consumption-lpg-latest'), 'Недостаточно данных');
-    expect(_text(tester, 'consumption-lpg-average'), 'Недостаточно данных');
-    expect(_text(tester, 'price-petrol-average'), 'Недостаточно данных');
-    expect(_text(tester, 'price-lpg-average'), 'Недостаточно данных');
-    expect(find.text('Нужны две полные заправки бензина.'), findsNWidgets(2));
-    expect(find.text('Нужны две полные заправки газа.'), findsNWidgets(2));
-    expect(
-      find.text(
-        'Укажите сумму чека. Средняя цена — сумма чеков, делённая на литры.',
-      ),
-      findsNWidgets(2),
-    );
-    expect(
-      find.textContaining('две полные заправки бензина. Цена'),
-      findsNothing,
-    );
+    expect(find.text('Бензин · нет заправок'), findsOneWidget);
+    expect(find.text('Газ · нет заправок'), findsOneWidget);
+    expect(find.text('Недостаточно данных'), findsNothing);
     expect(find.textContaining('0,0'), findsNothing);
     expect(find.textContaining('0 л/100'), findsNothing);
     expect(find.text('CNG'), findsNothing);
     expect(find.text('Окупаемость'), findsNothing);
     expect(find.text('Сервис'), findsNothing);
+    expect(find.textContaining('включая закрывающую'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('fuel-folded-petrol')));
+    await tester.pumpAndSettle();
+    expect(_text(tester, 'consumption-petrol-latest'), 'Недостаточно данных');
+    expect(_text(tester, 'consumption-petrol-average'), 'Недостаточно данных');
+    expect(_text(tester, 'price-petrol-average'), 'Недостаточно данных');
+    expect(find.text('Нужны две полные заправки бензина.'), findsNWidgets(2));
+    expect(
+      find.text(
+        'Укажите сумму чека. Средняя цена — сумма чеков, делённая на литры.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('две полные заправки бензина. Цена'),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('Как считается'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('включая закрывающую'), findsOneWidget);
   });
 
@@ -51,21 +57,24 @@ void main() {
     expect(_text(tester, 'consumption-petrol-average'), '10,0 л/100 км');
     expect(find.text('Фактический · 30 л на 300 км'), findsOneWidget);
     expect(find.text('Фактический · 30 л на 300 км · 1 цикл'), findsOneWidget);
-    expect(_text(tester, 'consumption-lpg-latest'), 'Недостаточно данных');
-    expect(_text(tester, 'consumption-lpg-average'), 'Недостаточно данных');
+    expect(find.text('Газ · нет заправок'), findsOneWidget);
     expect(find.textContaining('Бензин: незакрытый цикл'), findsNothing);
     expect(_text(tester, 'price-petrol-average'), 'Недостаточно данных');
     expect(
       find.textContaining('Нужны две полные заправки бензина'),
       findsNothing,
     );
-    expect(find.text('Нужны две полные заправки газа.'), findsNWidgets(2));
+    expect(find.text('Нужны две полные заправки газа.'), findsNothing);
     expect(
       find.text(
         'Укажите сумму чека. Средняя цена — сумма чеков, делённая на литры.',
       ),
-      findsNWidgets(2),
+      findsOneWidget,
     );
+    expect(find.textContaining(' · 10,0 л/100 км · '), findsNothing);
+    await tester.tap(find.text('Закрытые циклы · 1'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining(' · 10,0 л/100 км · '), findsOneWidget);
   });
 
   testWidgets('average price is per litre and skips a fill without a sum', (
@@ -345,11 +354,12 @@ void main() {
     expect(find.textContaining('незакрытый цикл'), findsNothing);
     expect(_text(tester, 'consumption-petrol-latest'), 'Недостаточно данных');
     expect(find.text('Последний цикл без числа'), findsNothing);
+    expect(find.text('Газ · нет заправок'), findsOneWidget);
     expect(
       find.text(
         'Укажите сумму чека. Средняя цена — сумма чеков, делённая на литры.',
       ),
-      findsNWidgets(2),
+      findsOneWidget,
     );
   });
 
@@ -551,24 +561,24 @@ void main() {
       pickSnapshot: () async => pick,
     );
     await _saveFill(tester, quantity: '40', odometer: '1000', full: true);
-    final oldId = controller.entries.single.id;
-    await tester.tap(find.byTooltip('Ещё'));
+    tester
+        .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+        .hideCurrentSnackBar();
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Копия журнала'));
+    final oldId = controller.entries.single.id;
+    await tester.tap(find.text('Журнал'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('journal-snapshot')));
     await tester.pumpAndSettle();
     expect(decodeSnapshot(shared!).entries.single.id, oldId);
 
-    await tester.tap(find.byTooltip('Ещё'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Восстановить копию'));
+    await tester.tap(find.byKey(const Key('journal-import')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Отмена'));
     await tester.pumpAndSettle();
     expect(controller.entries.single.id, oldId);
 
-    await tester.tap(find.byTooltip('Ещё'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Восстановить копию'));
+    await tester.tap(find.byKey(const Key('journal-import')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Заменить'));
     await tester.pump();
@@ -583,9 +593,7 @@ void main() {
     await tester.pumpAndSettle();
 
     pick = '{нет';
-    await tester.tap(find.byTooltip('Ещё'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Восстановить копию'));
+    await tester.tap(find.byKey(const Key('journal-import')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Заменить'));
     await tester.pump();
