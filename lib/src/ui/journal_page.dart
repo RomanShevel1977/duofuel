@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../model/records.dart';
@@ -28,15 +30,54 @@ class JournalPage extends StatefulWidget {
   State<JournalPage> createState() => _JournalPageState();
 }
 
+class _RemovedRow {
+  const _RemovedRow({this.entry, this.reset});
+
+  final FuelEntry? entry;
+  final OdometerReset? reset;
+
+  String get label =>
+      entry != null ? 'Заправка удалена' : 'Замена панели удалена';
+}
+
 class _JournalPageState extends State<JournalPage> {
   final TextEditingController _search = TextEditingController();
   JournalFuelFilter _fuel = JournalFuelFilter.all;
   DateTime? _day;
+  _RemovedRow? _removed;
+  Timer? _undoTimer;
 
   @override
   void dispose() {
+    _undoTimer?.cancel();
     _search.dispose();
     super.dispose();
+  }
+
+  void _offerUndo(FuelEntry? entry, OdometerReset? reset) {
+    _undoTimer?.cancel();
+    setState(() => _removed = _RemovedRow(entry: entry, reset: reset));
+    _undoTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      setState(() => _removed = null);
+    });
+  }
+
+  Future<void> _restoreRemoved() async {
+    final removed = _removed;
+    if (removed == null) return;
+    _undoTimer?.cancel();
+    setState(() => _removed = null);
+    final entry = removed.entry;
+    final reset = removed.reset;
+    final restored = entry != null
+        ? await widget.controller.saveEntry(entry)
+        : reset != null
+        ? await widget.controller.saveReset(reset)
+        : true;
+    if (restored || !mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text(journalWriteError)));
   }
 
   JournalFilter get _filter {
@@ -159,44 +200,84 @@ class _JournalPageState extends State<JournalPage> {
         for (final row in group.rows) _JournalItem.tile(row),
       ],
     ];
-    return ListView.builder(
-      key: const Key('journal-list'),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return switch (item.kind) {
-          _JournalKind.tools => _JournalTools(
-            search: _search,
-            fuel: _fuel,
-            day: _day,
-            onSearch: () => setState(() {}),
-            onFuel: (value) => setState(() => _fuel = value),
-            onPickDay: _pickDay,
-            onClearDay: () => setState(() => _day = null),
-            onExport: _export,
-            onExportSnapshot: widget.onExportSnapshot,
-            onImportSnapshot: widget.onImportSnapshot,
-            onReset: () => openReset(context, controller),
-          ),
-          _JournalKind.empty => const _EmptyJournal(),
-          _JournalKind.none => const Padding(
-            padding: EdgeInsets.symmetric(vertical: 32),
-            child: Text('Ничего не найдено', textAlign: TextAlign.center),
-          ),
-          _JournalKind.day => Padding(
-            padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
-            child: Text(
-              dayHeading(item.day!),
-              style: text.titleSmall?.copyWith(color: scheme.onSurfaceVariant),
+    final removed = _removed;
+    return Column(
+      children: [
+        if (removed != null)
+          Material(
+            color: scheme.inverseSurface,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      removed.label,
+                      style: text.bodyMedium?.copyWith(
+                        color: scheme.onInverseSurface,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    key: const Key('undo-delete'),
+                    onPressed: _restoreRemoved,
+                    child: Text(
+                      'Вернуть',
+                      style: TextStyle(color: scheme.inversePrimary),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          _JournalKind.tile => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _JournalTile(controller: controller, row: item.row!),
+        Expanded(
+          child: ListView.builder(
+            key: const Key('journal-list'),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return switch (item.kind) {
+                _JournalKind.tools => _JournalTools(
+                  search: _search,
+                  fuel: _fuel,
+                  day: _day,
+                  onSearch: () => setState(() {}),
+                  onFuel: (value) => setState(() => _fuel = value),
+                  onPickDay: _pickDay,
+                  onClearDay: () => setState(() => _day = null),
+                  onExport: _export,
+                  onExportSnapshot: widget.onExportSnapshot,
+                  onImportSnapshot: widget.onImportSnapshot,
+                  onReset: () => openReset(context, controller),
+                ),
+                _JournalKind.empty => const _EmptyJournal(),
+                _JournalKind.none => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32),
+                  child: Text('Ничего не найдено', textAlign: TextAlign.center),
+                ),
+                _JournalKind.day => Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+                  child: Text(
+                    dayHeading(item.day!),
+                    style: text.titleSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                _JournalKind.tile => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _JournalTile(
+                    controller: controller,
+                    row: item.row!,
+                    onRemoved: _offerUndo,
+                  ),
+                ),
+              };
+            },
           ),
-        };
-      },
+        ),
+      ],
     );
   }
 }
@@ -322,26 +403,10 @@ class _JournalTools extends StatelessWidget {
               style: text.bodySmall,
             ),
           ),
-        Wrap(
-          spacing: 4,
-          children: [
-            TextButton(
-              key: const Key('journal-snapshot'),
-              onPressed: onExportSnapshot,
-              child: const Text('Копия журнала'),
-            ),
-            TextButton(
-              key: const Key('journal-import'),
-              onPressed: onImportSnapshot,
-              child: const Text('Восстановить'),
-            ),
-            TextButton.icon(
-              key: const Key('journal-reset'),
-              onPressed: onReset,
-              icon: const Icon(Icons.speed_outlined),
-              label: const Text('Замена панели'),
-            ),
-          ],
+        _JournalExtras(
+          onExportSnapshot: onExportSnapshot,
+          onImportSnapshot: onImportSnapshot,
+          onReset: onReset,
         ),
         Align(
           alignment: Alignment.centerLeft,
@@ -370,6 +435,62 @@ class _JournalTools extends StatelessWidget {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _JournalExtras extends StatefulWidget {
+  const _JournalExtras({
+    required this.onExportSnapshot,
+    required this.onImportSnapshot,
+    required this.onReset,
+  });
+
+  final Future<void> Function()? onExportSnapshot;
+  final Future<void> Function()? onImportSnapshot;
+  final VoidCallback onReset;
+
+  @override
+  State<_JournalExtras> createState() => _JournalExtrasState();
+}
+
+class _JournalExtrasState extends State<_JournalExtras> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton.icon(
+          key: const Key('journal-more'),
+          onPressed: () => setState(() => _open = !_open),
+          icon: Icon(_open ? Icons.expand_less : Icons.expand_more),
+          label: const Text('Копия и панель'),
+        ),
+        if (_open)
+          Wrap(
+            spacing: 4,
+            children: [
+              TextButton(
+                key: const Key('journal-snapshot'),
+                onPressed: widget.onExportSnapshot,
+                child: const Text('Копия журнала'),
+              ),
+              TextButton(
+                key: const Key('journal-import'),
+                onPressed: widget.onImportSnapshot,
+                child: const Text('Восстановить'),
+              ),
+              TextButton.icon(
+                key: const Key('journal-reset'),
+                onPressed: widget.onReset,
+                icon: const Icon(Icons.speed_outlined),
+                label: const Text('Замена панели'),
+              ),
+            ],
+          ),
       ],
     );
   }
@@ -425,11 +546,45 @@ class _Row {
   int get millis => entry?.occurredAtMs ?? reset!.occurredAtMs;
 }
 
+String _paidLine(int totalMinor, double? liters) {
+  final money = formatMoney(totalMinor);
+  final unit = formatEnteredUnitPrice(totalMinor, liters);
+  if (unit == null) return money;
+  return '$money · $unit';
+}
+
+Future<void> _deleteRow(
+  BuildContext context, {
+  required LogController controller,
+  required FuelEntry? entry,
+  required OdometerReset? reset,
+  required void Function(FuelEntry? entry, OdometerReset? reset) onRemoved,
+}) async {
+  final accepted = await confirmDelete(context);
+  if (!accepted || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final wrote = entry != null
+      ? await controller.deleteEntry(entry.id)
+      : reset != null
+      ? await controller.deleteReset(reset.id)
+      : true;
+  if (!wrote) {
+    messenger.showSnackBar(const SnackBar(content: Text(journalWriteError)));
+    return;
+  }
+  onRemoved(entry, reset);
+}
+
 class _JournalTile extends StatelessWidget {
-  const _JournalTile({required this.controller, required this.row});
+  const _JournalTile({
+    required this.controller,
+    required this.row,
+    required this.onRemoved,
+  });
 
   final LogController controller;
   final _Row row;
+  final void Function(FuelEntry? entry, OdometerReset? reset) onRemoved;
 
   @override
   Widget build(BuildContext context) {
@@ -497,7 +652,7 @@ class _JournalTile extends StatelessWidget {
                       ),
                     if (paid != null)
                       Text(
-                        formatMoney(paid),
+                        _paidLine(paid, entry?.quantity),
                         style: text.titleSmall?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -509,19 +664,13 @@ class _JournalTile extends StatelessWidget {
                 tooltip: 'Удалить',
                 color: scheme.error,
                 style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
-                onPressed: () async {
-                  final accepted = await confirmDelete(context);
-                  if (!accepted) return;
-                  final wrote = entry != null
-                      ? await controller.deleteEntry(entry.id)
-                      : reset != null
-                      ? await controller.deleteReset(reset.id)
-                      : true;
-                  if (!context.mounted || wrote) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text(journalWriteError)),
-                  );
-                },
+                onPressed: () => _deleteRow(
+                  context,
+                  controller: controller,
+                  entry: entry,
+                  reset: reset,
+                  onRemoved: onRemoved,
+                ),
                 icon: const Icon(Icons.delete_outline),
               ),
             ],

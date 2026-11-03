@@ -1,5 +1,6 @@
 import '../calc/fuel_cycle.dart';
 import '../calc/price_average.dart';
+import '../calc/since_last_fill.dart';
 import '../model/records.dart';
 
 const formulaFootnote =
@@ -212,6 +213,15 @@ String cycleLine(CycleResult cycle) {
     return '$when · ${formatRate(rate)} · ${formatLiters(volume)} л · $distance км · Фактический';
   }
   return '$when · ${latestDetail(cycle)}';
+}
+
+String sinceLastFillLine(SinceLastFill since) {
+  final when = formatWhenMs(since.entry.occurredAtMs);
+  final km = since.kmSince;
+  if (km == null) {
+    return 'Последняя заправка $when · ${since.entry.odometerKm} км';
+  }
+  return 'Последняя заправка $when · ${since.entry.odometerKm} км · с тех пор $km км';
 }
 
 String unclosedLine(FuelType fuel) {
