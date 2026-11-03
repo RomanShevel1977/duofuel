@@ -11,10 +11,18 @@ import 'reset_form_page.dart';
 import 'share_journal.dart';
 
 class JournalPage extends StatefulWidget {
-  const JournalPage({super.key, required this.controller, this.onExport});
+  const JournalPage({
+    super.key,
+    required this.controller,
+    this.onExport,
+    this.onExportSnapshot,
+    this.onImportSnapshot,
+  });
 
   final LogController controller;
   final Future<void> Function(String csv)? onExport;
+  final Future<void> Function()? onExportSnapshot;
+  final Future<void> Function()? onImportSnapshot;
 
   @override
   State<JournalPage> createState() => _JournalPageState();
@@ -121,7 +129,10 @@ class _JournalPageState extends State<JournalPage> {
       for (final entry in controller.entries)
         if (filter.allowsEntry(entry)) _Row.entry(entry),
       for (final reset in controller.resets)
-        if (filter.allowsReset(reset)) _Row.reset(reset),
+        if (filter.allowsReset(reset))
+          _Row.reset(reset)
+        else if (filter.allowsResetExport(reset))
+          _Row.reset(reset, dimmed: true),
     ]..sort((a, b) => b.key.compareTo(a.key));
     final hasAny =
         controller.entries.isNotEmpty || controller.resets.isNotEmpty;
@@ -137,42 +148,81 @@ class _JournalPageState extends State<JournalPage> {
     }
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
-    return ListView(
+    final items = <_JournalItem>[
+      const _JournalItem.tools(),
+      if (!hasAny)
+        const _JournalItem.empty()
+      else if (rows.isEmpty)
+        const _JournalItem.none(),
+      for (final group in groups) ...[
+        _JournalItem.day(group.day),
+        for (final row in group.rows) _JournalItem.tile(row),
+      ],
+    ];
+    return ListView.builder(
+      key: const Key('journal-list'),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      children: [
-        _JournalTools(
-          search: _search,
-          fuel: _fuel,
-          day: _day,
-          onSearch: () => setState(() {}),
-          onFuel: (value) => setState(() => _fuel = value),
-          onPickDay: _pickDay,
-          onClearDay: () => setState(() => _day = null),
-          onExport: _export,
-        ),
-        if (!hasAny)
-          const _EmptyJournal()
-        else if (rows.isEmpty)
-          const Padding(
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return switch (item.kind) {
+          _JournalKind.tools => _JournalTools(
+            search: _search,
+            fuel: _fuel,
+            day: _day,
+            onSearch: () => setState(() {}),
+            onFuel: (value) => setState(() => _fuel = value),
+            onPickDay: _pickDay,
+            onClearDay: () => setState(() => _day = null),
+            onExport: _export,
+            onExportSnapshot: widget.onExportSnapshot,
+            onImportSnapshot: widget.onImportSnapshot,
+            onReset: () => openReset(context, controller),
+          ),
+          _JournalKind.empty => const _EmptyJournal(),
+          _JournalKind.none => const Padding(
             padding: EdgeInsets.symmetric(vertical: 32),
             child: Text('Ничего не найдено', textAlign: TextAlign.center),
           ),
-        for (final group in groups) ...[
-          Padding(
+          _JournalKind.day => Padding(
             padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
             child: Text(
-              dayHeading(group.day),
+              dayHeading(item.day!),
               style: text.titleSmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ),
-          for (final row in group.rows) ...[
-            _JournalTile(controller: controller, row: row),
-            const SizedBox(height: 8),
-          ],
-        ],
-      ],
+          _JournalKind.tile => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _JournalTile(controller: controller, row: item.row!),
+          ),
+        };
+      },
     );
   }
+}
+
+enum _JournalKind { tools, empty, none, day, tile }
+
+class _JournalItem {
+  const _JournalItem.tools()
+    : kind = _JournalKind.tools,
+      day = null,
+      row = null;
+
+  const _JournalItem.empty()
+    : kind = _JournalKind.empty,
+      day = null,
+      row = null;
+
+  const _JournalItem.none() : kind = _JournalKind.none, day = null, row = null;
+
+  const _JournalItem.day(this.day) : kind = _JournalKind.day, row = null;
+
+  const _JournalItem.tile(this.row) : kind = _JournalKind.tile, day = null;
+
+  final _JournalKind kind;
+  final DateTime? day;
+  final _Row? row;
 }
 
 class _JournalTools extends StatelessWidget {
@@ -185,6 +235,9 @@ class _JournalTools extends StatelessWidget {
     required this.onPickDay,
     required this.onClearDay,
     required this.onExport,
+    required this.onExportSnapshot,
+    required this.onImportSnapshot,
+    required this.onReset,
   });
 
   final TextEditingController search;
@@ -195,6 +248,9 @@ class _JournalTools extends StatelessWidget {
   final VoidCallback onPickDay;
   final VoidCallback onClearDay;
   final VoidCallback onExport;
+  final Future<void> Function()? onExportSnapshot;
+  final Future<void> Function()? onImportSnapshot;
+  final VoidCallback onReset;
 
   @override
   Widget build(BuildContext context) {
@@ -227,7 +283,7 @@ class _JournalTools extends StatelessWidget {
             ),
             IconButton(
               key: const Key('journal-export'),
-              tooltip: 'Экспорт CSV',
+              tooltip: 'Таблица CSV. Назад не читается',
               onPressed: onExport,
               icon: const Icon(Icons.ios_share),
             ),
@@ -256,6 +312,36 @@ class _JournalTools extends StatelessWidget {
           ],
           selected: {fuel},
           onSelectionChanged: (selected) => onFuel(selected.first),
+        ),
+        if (fuel != JournalFuelFilter.all)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              journalResetExportNote,
+              key: const Key('journal-reset-export-note'),
+              style: text.bodySmall,
+            ),
+          ),
+        Wrap(
+          spacing: 4,
+          children: [
+            TextButton(
+              key: const Key('journal-snapshot'),
+              onPressed: onExportSnapshot,
+              child: const Text('Копия журнала'),
+            ),
+            TextButton(
+              key: const Key('journal-import'),
+              onPressed: onImportSnapshot,
+              child: const Text('Восстановить'),
+            ),
+            TextButton.icon(
+              key: const Key('journal-reset'),
+              onPressed: onReset,
+              icon: const Icon(Icons.speed_outlined),
+              label: const Text('Замена панели'),
+            ),
+          ],
         ),
         Align(
           alignment: Alignment.centerLeft,
@@ -327,11 +413,12 @@ class _DayGroup {
 }
 
 class _Row {
-  _Row.entry(this.entry) : reset = null;
-  _Row.reset(this.reset) : entry = null;
+  _Row.entry(this.entry) : reset = null, dimmed = false;
+  _Row.reset(this.reset, {this.dimmed = false}) : entry = null;
 
   final FuelEntry? entry;
   final OdometerReset? reset;
+  final bool dimmed;
 
   SortKey get key => entry?.sortKey ?? reset!.sortKey;
 
@@ -370,7 +457,7 @@ class _JournalTile extends StatelessWidget {
         : entry.isFull
         ? scheme.onPrimaryContainer
         : scheme.onSurface;
-    return Card(
+    final tile = Card(
       child: InkWell(
         onTap: () {
           if (entry != null) {
@@ -397,7 +484,10 @@ class _JournalTile extends StatelessWidget {
                     if (kind != null)
                       Text(kind, style: text.bodyMedium)
                     else
-                      Text(whenLine, style: text.bodyMedium),
+                      Text(
+                        row.dimmed ? '$whenLine · в таблице CSV' : whenLine,
+                        style: text.bodyMedium,
+                      ),
                     if (kind != null)
                       Text(
                         whenLine,
@@ -439,5 +529,7 @@ class _JournalTile extends StatelessWidget {
         ),
       ),
     );
+    if (!row.dimmed) return tile;
+    return Opacity(opacity: 0.55, child: tile);
   }
 }

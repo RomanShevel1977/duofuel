@@ -73,6 +73,12 @@ void main() {
             .contains('duofuel-zhurnal.csv'),
         isFalse,
       );
+      expect(
+        journalExportMessage(filtered: false, fileName: 'a.csv', shared: true),
+        contains('не читает обратно'),
+      );
+      expect(chartScrollWidth(count: 2, viewportWidth: 300), 300);
+      expect(chartScrollWidth(count: 12, viewportWidth: 300), greaterThan(300));
     },
   );
 
@@ -220,6 +226,34 @@ void main() {
     expect(spoken.contains(' 0,0'), isFalse);
   });
 
+  testWidgets('a chart point shows its date and a long chart can scroll', (
+    tester,
+  ) async {
+    const point = CycleChartPoint(
+      fuel: FuelType.petrol,
+      endMs: 1,
+      ratePer100: 8.5,
+    );
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: CycleChart(points: [point])),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final plot = find.byKey(const Key('cycle-chart-plot'));
+    final width = tester.getSize(plot).width;
+    final spot = chartSpots(
+      points: const [point],
+      width: width,
+      height: chartPlotHeight,
+    ).single;
+    await tester.tapAt(tester.getTopLeft(plot) + Offset(spot.x, spot.y));
+    await tester.pump();
+    expect(find.byKey(const Key('chart-point-detail')), findsOneWidget);
+    expect(find.text(chartPointDetail(point)), findsOneWidget);
+    expect(find.textContaining('8,5 л/100 км'), findsOneWidget);
+  });
+
   test('theme choice parses the three modes', () {
     expect(parseThemeChoice('light'), ThemeChoice.light);
     expect(parseThemeChoice('dark'), ThemeChoice.dark);
@@ -317,11 +351,12 @@ void main() {
     expect(exported!.contains('Фильтр;'), isFalse);
     expect(exported!, contains('Заправка;Бензин;20;1100,00;1300;да'));
     expect(exported!, contains('Замена панели'));
-    expect(find.text('Замена панели'), findsOneWidget);
+    expect(find.textContaining('в таблице CSV'), findsNothing);
 
     await tester.tap(find.byTooltip('Только газ'));
     await tester.pump();
-    expect(find.text('Замена панели'), findsNothing);
+    expect(find.byKey(const Key('journal-reset-export-note')), findsOneWidget);
+    expect(find.textContaining('в таблице CSV'), findsOneWidget);
     await tester.tap(find.byKey(const Key('journal-export')));
     await tester.pump();
     expect(exported!, contains('Фильтр;топливо: Газ'));
@@ -331,6 +366,63 @@ void main() {
     expect(exported!, contains('Замена панели'));
     expect(exported!.contains('Бензин'), isFalse);
     semantics.dispose();
+  });
+
+  testWidgets('the journal builds later rows only as they scroll into view', (
+    tester,
+  ) async {
+    final entries = [
+      for (var index = 1; index <= 40; index++)
+        FuelEntry(
+          id: 'e$index',
+          fuelType: FuelType.petrol,
+          occurredAtMs: index,
+          odometerKm: 1000 + index,
+          quantity: index.toDouble(),
+          unit: 'L',
+          isFull: index.isOdd,
+          createdAtMs: index,
+        ),
+    ];
+    final log = MemoryFuelLog();
+    await log.write(
+      FuelSnapshot(
+        vehicleName: 'Автомобиль',
+        entries: entries,
+        resets: const [],
+      ),
+    );
+    final controller = LogController(log);
+    await controller.reload();
+    tester.view.physicalSize = const Size(800, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(DuoFuelApp(controller: controller));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Журнал'));
+    await tester.pumpAndSettle();
+    expect(find.text('40 л'), findsOneWidget);
+    expect(find.text('1 л'), findsNothing);
+    await tester.tap(find.byKey(const Key('journal-reset')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('reset-odometer')), '12');
+    await tester.tap(find.byKey(const Key('save-reset')));
+    await tester.pumpAndSettle();
+    expect(controller.resets.single.odometerKm, 12);
+    expect(find.text('1 л'), findsNothing);
+    for (
+      var step = 0;
+      step < 20 && find.text('1 л').evaluate().isEmpty;
+      step++
+    ) {
+      await tester.drag(
+        find.byKey(const Key('journal-list')),
+        const Offset(0, -600),
+      );
+      await tester.pump();
+    }
+    expect(find.text('1 л'), findsOneWidget);
   });
 
   testWidgets('fuel filter stays after opening the summary', (tester) async {

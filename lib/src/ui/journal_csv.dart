@@ -71,10 +71,13 @@ String journalExportMessage({
   final scope = filtered
       ? 'В файле только строки, которые сейчас видны в журнале.'
       : 'В файле весь журнал, включая замены панели.';
+  const table =
+      'Это таблица CSV, приложение её не читает обратно. '
+      'Чтобы вернуть журнал, сохраните «Копия журнала».';
   if (shared) {
-    return '$scope Сохраните «$fileName» через отправку — так файл можно найти.';
+    return '$scope Сохраните «$fileName» через отправку — так файл можно найти. $table';
   }
-  return '$scope Файл «$fileName» лежит в папке duofuel-export. Отправка не открылась.';
+  return '$scope Файл «$fileName» лежит в папке duofuel-export. Отправка не открылась. $table';
 }
 
 String _cell(String value) {

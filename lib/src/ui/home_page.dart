@@ -61,27 +61,13 @@ class HomePage extends StatelessWidget {
         _FuelCard(controller: controller, fuel: FuelType.petrol),
         const SizedBox(height: 12),
         _FuelCard(controller: controller, fuel: FuelType.lpg),
-        const SizedBox(height: 20),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: scheme.outlineVariant),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Как считается', style: text.titleSmall),
-                const SizedBox(height: 4),
-                Text(
-                  formulaFootnote,
-                  style: text.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
+        const SizedBox(height: 12),
+        _Disclosure(
+          key: const Key('formula-note'),
+          title: 'Как считается',
+          builder: (context) => Text(
+            formulaFootnote,
+            style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
         ),
       ],
@@ -138,14 +124,43 @@ class _StartHint extends StatelessWidget {
   }
 }
 
-class _FuelCard extends StatelessWidget {
+class _FuelCard extends StatefulWidget {
   const _FuelCard({required this.controller, required this.fuel});
 
   final LogController controller;
   final FuelType fuel;
 
   @override
+  State<_FuelCard> createState() => _FuelCardState();
+}
+
+class _FuelCardState extends State<_FuelCard> {
+  bool _openedEmpty = false;
+
+  @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
+    final fuel = widget.fuel;
+    final hasEntries = controller.entries.any(
+      (entry) => entry.fuelType == fuel,
+    );
+    if (!hasEntries && !_openedEmpty) {
+      return Card(
+        child: InkWell(
+          key: Key('fuel-folded-${fuel.name}'),
+          onTap: () => setState(() => _openedEmpty = true),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Expanded(child: Text('${fuelLabel(fuel)} · нет заправок')),
+                const Icon(Icons.expand_more),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final report = controller.consumption(fuel);
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
@@ -238,23 +253,59 @@ class _FuelCard extends StatelessWidget {
               ),
             ],
             if (report.cycles.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text('Закрытые циклы', style: text.titleSmall),
-              const SizedBox(height: 4),
-              for (final cycle in report.cycles)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    cycleLine(cycle),
-                    style: text.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
+              const SizedBox(height: 8),
+              _Disclosure(
+                key: Key('closed-cycles-${fuel.name}'),
+                title: 'Закрытые циклы · ${report.cycles.length}',
+                builder: (context) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final cycle in report.cycles)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          cycleLine(cycle),
+                          style: text.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
+              ),
             ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _Disclosure extends StatefulWidget {
+  const _Disclosure({super.key, required this.title, required this.builder});
+
+  final String title;
+  final WidgetBuilder builder;
+
+  @override
+  State<_Disclosure> createState() => _DisclosureState();
+}
+
+class _DisclosureState extends State<_Disclosure> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton.icon(
+          onPressed: () => setState(() => _open = !_open),
+          icon: Icon(_open ? Icons.expand_less : Icons.expand_more),
+          label: Text(widget.title),
+        ),
+        if (_open) widget.builder(context),
+      ],
     );
   }
 }
