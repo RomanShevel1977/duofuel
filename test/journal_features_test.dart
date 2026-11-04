@@ -108,6 +108,46 @@ void main() {
     expect(byText.allowsEntry(lpg), isTrue);
     final byDay = JournalFilter(day: DateTime(day.year, day.month, day.day));
     expect(byDay.allowsEntry(petrol), isTrue);
+    final october = DateTime(2026, 10, 1);
+    final byMonth = JournalFilter(month: october);
+    expect(
+      byMonth.allowsEntry(
+        _fill(
+          'oct',
+          FuelType.petrol,
+          DateTime(2026, 10, 20).millisecondsSinceEpoch,
+          1500,
+          9,
+          true,
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      byMonth.allowsEntry(
+        _fill(
+          'nov',
+          FuelType.petrol,
+          DateTime(2026, 11, 2).millisecondsSinceEpoch,
+          1600,
+          9,
+          true,
+        ),
+      ),
+      isFalse,
+    );
+    expect(
+      JournalFilter(month: october).allowsResetExport(
+        OdometerReset(
+          id: 'nov-panel',
+          occurredAtMs: DateTime(2026, 11, 3).millisecondsSinceEpoch,
+          odometerKm: 10,
+          createdAtMs: 1,
+        ),
+      ),
+      isFalse,
+    );
+    expect(journalFilterLine(month: october), 'Фильтр;месяц: октябрь 2026');
     expect(
       byDay.allowsEntry(
         _fill(
@@ -412,6 +452,61 @@ void main() {
     expect(exported!, contains('Замена панели'));
     expect(exported!.contains('Бензин'), isFalse);
     semantics.dispose();
+  });
+
+  testWidgets('a month filter keeps that month and drops the chosen day', (
+    tester,
+  ) async {
+    final log = MemoryFuelLog();
+    await log.write(
+      FuelSnapshot(
+        vehicleName: 'Автомобиль',
+        entries: [
+          _fill(
+            'oct',
+            FuelType.petrol,
+            DateTime(2026, 10, 20).millisecondsSinceEpoch,
+            1000,
+            40,
+            true,
+          ),
+          _fill(
+            'nov',
+            FuelType.petrol,
+            DateTime(2026, 11, 2).millisecondsSinceEpoch,
+            1200,
+            7,
+            true,
+          ),
+        ],
+        resets: const [],
+      ),
+    );
+    final controller = LogController(log);
+    await controller.reload();
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(DuoFuelApp(controller: controller));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Журнал'));
+    await tester.pumpAndSettle();
+    expect(find.text('40 л'), findsOneWidget);
+    expect(find.text('7 л'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('journal-month')));
+    await tester.pumpAndSettle();
+    expect(find.text('2026'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('journal-month-10')));
+    await tester.pumpAndSettle();
+    expect(find.text('октябрь 2026'), findsOneWidget);
+    expect(find.text('40 л'), findsOneWidget);
+    expect(find.text('7 л'), findsNothing);
+    expect(find.text('Все дни'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('journal-month-clear')));
+    await tester.pumpAndSettle();
+    expect(find.text('7 л'), findsOneWidget);
   });
 
   testWidgets('the journal builds later rows only as they scroll into view', (

@@ -4,10 +4,10 @@ import 'format.dart';
 enum JournalFuelFilter { all, petrol, lpg }
 
 const journalResetExportNote =
-    'В файле замена панели остаётся, если подходят день и поиск.';
+    'В файле замена панели остаётся, если подходят день, месяц и поиск.';
 
 class JournalFilter {
-  const JournalFilter({this.text = '', this.fuel, this.day});
+  const JournalFilter({this.text = '', this.fuel, this.day, this.month});
 
   final String text;
 
@@ -15,11 +15,16 @@ class JournalFilter {
   final FuelType? fuel;
   final DateTime? day;
 
-  bool get isActive => text.trim().isNotEmpty || fuel != null || day != null;
+  /// Любой день этого месяца. Вместе с [day] оба условия должны выполниться.
+  final DateTime? month;
+
+  bool get isActive =>
+      text.trim().isNotEmpty || fuel != null || day != null || month != null;
 
   bool allowsEntry(FuelEntry entry) {
     if (fuel != null && entry.fuelType != fuel) return false;
     if (!_onDay(entry.occurredAtMs)) return false;
+    if (!_inMonth(entry.occurredAtMs)) return false;
     return _contains(_entryHaystack(entry));
   }
 
@@ -28,9 +33,11 @@ class JournalFilter {
     return allowsResetExport(reset);
   }
 
-  /// В CSV замена панели остаётся при фильтре топлива, если подходят день и поиск.
+  /// В CSV замена панели остаётся при фильтре топлива, если подходят день, месяц и поиск.
   bool allowsResetExport(OdometerReset reset) {
-    if (!_onDay(reset.occurredAtMs)) return false;
+    if (!_onDay(reset.occurredAtMs) || !_inMonth(reset.occurredAtMs)) {
+      return false;
+    }
     final haystack =
         'замена панели ${reset.odometerKm} ${formatWhenMs(reset.occurredAtMs)}';
     return _contains(haystack);
@@ -43,6 +50,13 @@ class JournalFilter {
     return when.year == selected.year &&
         when.month == selected.month &&
         when.day == selected.day;
+  }
+
+  bool _inMonth(int millis) {
+    final selected = month;
+    if (selected == null) return true;
+    final when = DateTime.fromMillisecondsSinceEpoch(millis);
+    return when.year == selected.year && when.month == selected.month;
   }
 
   bool _contains(String haystack) {

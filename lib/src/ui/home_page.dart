@@ -237,6 +237,14 @@ class _FuelCardState extends State<_FuelCard> {
                   color: scheme.onSurfaceVariant,
                 ),
               ),
+              const SizedBox(height: 4),
+              Text(
+                lastReceiptLine(since.entry),
+                key: Key('last-receipt-${fuel.name}'),
+                style: text.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
             ],
             const SizedBox(height: 12),
             latest,

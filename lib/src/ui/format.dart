@@ -215,6 +215,33 @@ String cycleLine(CycleResult cycle) {
   return '$when · ${latestDetail(cycle)}';
 }
 
+const monthNames = [
+  'январь',
+  'февраль',
+  'март',
+  'апрель',
+  'май',
+  'июнь',
+  'июль',
+  'август',
+  'сентябрь',
+  'октябрь',
+  'ноябрь',
+  'декабрь',
+];
+
+String monthHeading(DateTime month) =>
+    '${monthNames[month.month - 1]} ${month.year}';
+
+/// Сумма и цена литра последней заправки. Среднюю цену не заменяет.
+String lastReceiptLine(FuelEntry entry) {
+  final total = entry.totalMinor;
+  if (total == null) return 'Последний чек не указан.';
+  final unit = formatEnteredUnitPrice(total, entry.quantity);
+  if (unit == null) return 'Последний чек: ${formatMoney(total)}';
+  return 'Последний чек: ${formatMoney(total)} · $unit';
+}
+
 String sinceLastFillLine(SinceLastFill since) {
   final when = formatWhenMs(since.entry.occurredAtMs);
   final km = since.kmSince;
