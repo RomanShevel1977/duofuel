@@ -94,7 +94,12 @@ void main() {
 
     expect(_text(tester, 'price-petrol-average'), '55,00 грн/л');
     expect(find.text('3300,00 грн на 60 л · 2 заправки'), findsOneWidget);
+    expect(_text(tester, 'last-receipt-petrol'), 'Последний чек не указан.');
     expect(_text(tester, 'price-lpg-average'), '30,00 грн/л');
+    expect(
+      _text(tester, 'last-receipt-lpg'),
+      'Последний чек: 240,00 грн · 30,00 грн/л',
+    );
     expect(_text(tester, 'consumption-petrol-latest'), 'Недостаточно данных');
   });
 
@@ -533,6 +538,22 @@ void main() {
       expect(controller.vehicleName, 'Автомобиль');
     },
   );
+
+  testWidgets('the card shows the receipt of the latest fill', (tester) async {
+    await _pump(tester);
+    await _saveFill(
+      tester,
+      quantity: '40',
+      odometer: '1000',
+      total: '2200',
+      full: true,
+    );
+    expect(
+      _text(tester, 'last-receipt-petrol'),
+      'Последний чек: 2200,00 грн · 55,00 грн/л',
+    );
+    expect(_text(tester, 'price-petrol-average'), '55,00 грн/л');
+  });
 
   testWidgets('the card shows kilometres since the last fill of that fuel', (
     tester,

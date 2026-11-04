@@ -44,6 +44,7 @@ class _JournalPageState extends State<JournalPage> {
   final TextEditingController _search = TextEditingController();
   JournalFuelFilter _fuel = JournalFuelFilter.all;
   DateTime? _day;
+  DateTime? _month;
   _RemovedRow? _removed;
   Timer? _undoTimer;
 
@@ -89,18 +90,34 @@ class _JournalPageState extends State<JournalPage> {
         JournalFuelFilter.lpg => FuelType.lpg,
       },
       day: _day,
+      month: _month,
     );
   }
 
   Future<void> _pickDay() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: _day ?? DateTime.now(),
+      initialDate: _day ?? _month ?? DateTime.now(),
       firstDate: DateTime(1990),
       lastDate: DateTime(2100),
     );
     if (picked == null) return;
-    setState(() => _day = DateTime(picked.year, picked.month, picked.day));
+    setState(() {
+      _day = DateTime(picked.year, picked.month, picked.day);
+      _month = null;
+    });
+  }
+
+  Future<void> _pickMonth() async {
+    final picked = await showDialog<DateTime>(
+      context: context,
+      builder: (context) => _MonthDialog(initial: _month ?? DateTime.now()),
+    );
+    if (picked == null) return;
+    setState(() {
+      _month = DateTime(picked.year, picked.month);
+      _day = null;
+    });
   }
 
   Future<void> _export() async {
@@ -119,6 +136,7 @@ class _JournalPageState extends State<JournalPage> {
       filterLine: journalFilterLine(
         fuel: filter.fuel,
         day: filter.day,
+        month: filter.month,
         text: filter.text,
       ),
     );
@@ -244,8 +262,11 @@ class _JournalPageState extends State<JournalPage> {
                   day: _day,
                   onSearch: () => setState(() {}),
                   onFuel: (value) => setState(() => _fuel = value),
+                  month: _month,
                   onPickDay: _pickDay,
                   onClearDay: () => setState(() => _day = null),
+                  onPickMonth: _pickMonth,
+                  onClearMonth: () => setState(() => _month = null),
                   onExport: _export,
                   onExportSnapshot: widget.onExportSnapshot,
                   onImportSnapshot: widget.onImportSnapshot,
@@ -311,10 +332,13 @@ class _JournalTools extends StatelessWidget {
     required this.search,
     required this.fuel,
     required this.day,
+    required this.month,
     required this.onSearch,
     required this.onFuel,
     required this.onPickDay,
     required this.onClearDay,
+    required this.onPickMonth,
+    required this.onClearMonth,
     required this.onExport,
     required this.onExportSnapshot,
     required this.onImportSnapshot,
@@ -324,10 +348,13 @@ class _JournalTools extends StatelessWidget {
   final TextEditingController search;
   final JournalFuelFilter fuel;
   final DateTime? day;
+  final DateTime? month;
   final VoidCallback onSearch;
   final ValueChanged<JournalFuelFilter> onFuel;
   final VoidCallback onPickDay;
   final VoidCallback onClearDay;
+  final VoidCallback onPickMonth;
+  final VoidCallback onClearMonth;
   final VoidCallback onExport;
   final Future<void> Function()? onExportSnapshot;
   final Future<void> Function()? onImportSnapshot;
@@ -408,32 +435,100 @@ class _JournalTools extends StatelessWidget {
           onImportSnapshot: onImportSnapshot,
           onReset: onReset,
         ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextButton.icon(
-                key: const Key('journal-day'),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  minimumSize: const Size(0, 36),
-                ),
-                onPressed: onPickDay,
-                icon: const Icon(Icons.calendar_today_outlined, size: 18),
-                label: Text(day == null ? 'Все дни' : dayHeading(day!)),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            TextButton.icon(
+              key: const Key('journal-day'),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                minimumSize: const Size(0, 36),
               ),
-              if (day != null)
-                IconButton(
-                  key: const Key('journal-day-clear'),
-                  tooltip: 'Сбросить день',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: onClearDay,
-                  icon: const Icon(Icons.close),
-                ),
-            ],
-          ),
+              onPressed: onPickDay,
+              icon: const Icon(Icons.calendar_today_outlined, size: 18),
+              label: Text(day == null ? 'Все дни' : dayHeading(day!)),
+            ),
+            if (day != null)
+              IconButton(
+                key: const Key('journal-day-clear'),
+                tooltip: 'Сбросить день',
+                visualDensity: VisualDensity.compact,
+                onPressed: onClearDay,
+                icon: const Icon(Icons.close),
+              ),
+            TextButton.icon(
+              key: const Key('journal-month'),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                minimumSize: const Size(0, 36),
+              ),
+              onPressed: onPickMonth,
+              icon: const Icon(Icons.calendar_month_outlined, size: 18),
+              label: Text(month == null ? 'Все месяцы' : monthHeading(month!)),
+            ),
+            if (month != null)
+              IconButton(
+                key: const Key('journal-month-clear'),
+                tooltip: 'Сбросить месяц',
+                visualDensity: VisualDensity.compact,
+                onPressed: onClearMonth,
+                icon: const Icon(Icons.close),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _MonthDialog extends StatefulWidget {
+  const _MonthDialog({required this.initial});
+
+  final DateTime initial;
+
+  @override
+  State<_MonthDialog> createState() => _MonthDialogState();
+}
+
+class _MonthDialogState extends State<_MonthDialog> {
+  late int _year = widget.initial.year;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('$_year', key: const Key('journal-month-year')),
+      content: SizedBox(
+        width: 320,
+        child: Wrap(
+          spacing: 4,
+          children: [
+            for (var month = 1; month <= 12; month++)
+              TextButton(
+                key: Key('journal-month-$month'),
+                onPressed: () => Navigator.pop(context, DateTime(_year, month)),
+                child: Text(monthNames[month - 1]),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        IconButton(
+          key: const Key('journal-month-prev'),
+          tooltip: 'Предыдущий год',
+          onPressed: _year > 1990 ? () => setState(() => _year -= 1) : null,
+          icon: const Icon(Icons.chevron_left),
+        ),
+        IconButton(
+          key: const Key('journal-month-next'),
+          tooltip: 'Следующий год',
+          onPressed: _year < 2100 ? () => setState(() => _year += 1) : null,
+          icon: const Icon(Icons.chevron_right),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
         ),
       ],
     );

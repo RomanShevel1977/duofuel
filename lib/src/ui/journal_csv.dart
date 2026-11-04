@@ -4,10 +4,16 @@ import 'format.dart';
 const journalCsvHeader =
     'Дата;Событие;Топливо;Литры;Сумма чека;Одометр;Полный бак';
 
-String journalFilterLine({FuelType? fuel, DateTime? day, String text = ''}) {
+String journalFilterLine({
+  FuelType? fuel,
+  DateTime? day,
+  DateTime? month,
+  String text = '',
+}) {
   final parts = <String>[
     if (fuel != null) 'топливо: ${fuelLabel(fuel)}',
     if (day != null) 'день: ${_csvDay(day)}',
+    if (month != null) 'месяц: ${monthHeading(month)}',
     if (text.trim().isNotEmpty) 'текст: ${text.trim()}',
   ];
   if (parts.isEmpty) return '';
